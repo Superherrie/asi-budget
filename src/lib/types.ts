@@ -75,17 +75,21 @@ export interface ActualLine extends Partial<MonthValues> {
   account_id: number
 }
 
-export interface Employee extends Partial<MonthValues> {
+export interface Employee {
   id?: number
   cycle_id: number
   cost_centre_id: number
   name: string
   title: string
-  salary_account_id: number | null
-  cellphone_account_id: number | null
-  cell_m: Partial<MonthValues> | null
   is_new: boolean
   active: boolean
+}
+
+export interface EmployeeLine extends Partial<MonthValues> {
+  id?: number
+  employee_id: number
+  kind: 'salary' | 'cellphone'
+  account_id: number
 }
 
 export interface Vehicle {
