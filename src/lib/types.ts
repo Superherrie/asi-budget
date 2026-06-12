@@ -1,0 +1,139 @@
+import type { MonthValues } from './months'
+
+export interface Profile {
+  user_id: string
+  email: string
+  full_name: string
+  is_admin: boolean
+}
+
+export type CcRole = 'compiler' | 'approver'
+
+export interface CostCentre {
+  id: number
+  code: string
+  name: string
+  type: 'branch' | 'admin'
+  active: boolean
+}
+
+export interface Assignment {
+  id: number
+  user_id: string
+  cost_centre_id: number
+  role: CcRole
+}
+
+export interface Cycle {
+  id: number
+  name: string
+  fy_year: number
+  status: 'open' | 'closed'
+}
+
+export type AccountSection =
+  | 'sales'
+  | 'cos_material'
+  | 'cos_ops_cabling'
+  | 'selling'
+  | 'ioh_admin'
+  | 'ioh_exec'
+  | 'ioh_operating'
+  | 'ioh_facilities_it'
+  | 'ioh_facilities_premises'
+  | 'ioh_marketing'
+  | 'ioh_training'
+  | 'ioh_statutory'
+  | 'ioh_other'
+  | 'ho_fees'
+  | 'rti_depreciation'
+  | 'exceptional'
+  | 'finance'
+
+export type InputType = 'direct' | 'revenue' | 'salary' | 'cellphone' | 'vehicle'
+
+export interface Account {
+  id: number
+  code: string
+  name: string
+  section: AccountSection
+  sort_order: number
+  input_type: InputType
+}
+
+export interface BudgetLine extends Partial<MonthValues> {
+  id?: number
+  cycle_id: number
+  cost_centre_id: number
+  account_id: number
+}
+
+export interface ActualLine extends Partial<MonthValues> {
+  id?: number
+  fy_year: number
+  cost_centre_id: number
+  account_id: number
+}
+
+export interface Employee extends Partial<MonthValues> {
+  id?: number
+  cycle_id: number
+  cost_centre_id: number
+  name: string
+  title: string
+  salary_account_id: number | null
+  cellphone_account_id: number | null
+  cell_m: Partial<MonthValues> | null
+  is_new: boolean
+  active: boolean
+}
+
+export interface Vehicle {
+  id?: number
+  cost_centre_id: number
+  registration: string
+  description: string
+  active: boolean
+}
+
+export interface VehicleLine extends Partial<MonthValues> {
+  id?: number
+  cycle_id: number
+  vehicle_id: number
+  account_id: number
+}
+
+export interface Team {
+  id?: number
+  cost_centre_id: number
+  name: string
+}
+
+export interface Customer {
+  id?: number
+  cost_centre_id: number
+  name: string
+}
+
+export interface RevenueLine extends Partial<MonthValues> {
+  id?: number
+  cycle_id: number
+  cost_centre_id: number
+  team_id: number | null
+  customer_id: number | null
+  account_id: number
+}
+
+export type ApprovalStatus = 'draft' | 'submitted' | 'approved' | 'rejected'
+
+export interface Approval {
+  id?: number
+  cycle_id: number
+  cost_centre_id: number
+  status: ApprovalStatus
+  submitted_by: string | null
+  submitted_at: string | null
+  decided_by: string | null
+  decided_at: string | null
+  comment: string | null
+}
