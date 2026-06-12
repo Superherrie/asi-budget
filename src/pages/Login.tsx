@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -26,6 +26,11 @@ export default function Login() {
       <form onSubmit={onSubmit} className="w-96 rounded-xl bg-white p-8 shadow">
         <h1 className="mb-1 text-xl font-semibold text-sky-950">ASI Connect Budget</h1>
         <p className="mb-6 text-sm text-slate-500">Sign in with your budget account</p>
+        {!supabaseConfigured && (
+          <p className="mb-4 rounded bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Supabase is not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+          </p>
+        )}
         <label className="mb-1 block text-sm font-medium">Email</label>
         <input
           type="email"
