@@ -13,9 +13,9 @@ export function fmtPct(n: number | null | undefined): string {
   return `${(n * 100).toFixed(1)}%`
 }
 
-/** Parse a user-typed or pasted amount: handles spaces, commas, parentheses, "R". */
+/** Parse a user-typed or pasted amount: handles spaces (incl. non-breaking), commas, parentheses, "R". */
 export function parseAmount(s: string): number | null {
-  const t = s.replace(/[R\s, ]/gi, '').trim()
+  const t = s.replace(/[R\s,\u00a0]/gi, '').trim()
   if (t === '' || t === '-') return 0
   const neg = /^\(.*\)$/.test(t)
   const core = neg ? t.slice(1, -1) : t

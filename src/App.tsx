@@ -3,10 +3,9 @@ import { AuthProvider } from './context/AuthContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-
-function Placeholder({ title }: { title: string }) {
-  return <div className="text-slate-500">{title} — coming soon</div>
-}
+import BudgetEditor from './pages/editor/BudgetEditor'
+import CompanyView from './pages/CompanyView'
+import AdminHome from './pages/admin/AdminHome'
 
 export default function App() {
   return (
@@ -16,9 +15,9 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/cc/:code/*" element={<Placeholder title="Budget editor" />} />
-            <Route path="/company" element={<Placeholder title="Company view" />} />
-            <Route path="/admin/*" element={<Placeholder title="Admin" />} />
+            <Route path="/cc/:code/*" element={<BudgetEditor />} />
+            <Route path="/company" element={<CompanyView />} />
+            <Route path="/admin/*" element={<AdminHome />} />
           </Route>
         </Routes>
       </HashRouter>

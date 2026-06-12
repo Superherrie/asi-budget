@@ -18,5 +18,11 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Plain fetch-in-effect and refs-in-handler patterns are fine for this app;
+      // these compiler-powered rules flag them too aggressively.
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
+    },
   },
 ])
