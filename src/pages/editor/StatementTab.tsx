@@ -24,6 +24,7 @@ const detailTab: Record<string, { path: string; label: string }> = {
   salary: { path: 'salaries', label: 'Salaries' },
   cellphone: { path: 'salaries', label: 'Salaries & Cell Phones' },
   vehicle: { path: 'vehicles', label: 'Vehicles' },
+  material_pct: { path: 'revenue', label: 'Revenue (% of sales)' },
 }
 
 export default function StatementTab({ budget }: { budget: BudgetCtx }) {

@@ -50,7 +50,7 @@ export type AccountSection =
   | 'exceptional'
   | 'finance'
 
-export type InputType = 'direct' | 'revenue' | 'salary' | 'cellphone' | 'vehicle'
+export type InputType = 'direct' | 'revenue' | 'salary' | 'cellphone' | 'vehicle' | 'material_pct'
 
 export interface Account {
   id: number
@@ -126,6 +126,8 @@ export interface RevenueLine extends Partial<MonthValues> {
   team_id: number | null
   customer_id: number | null
   account_id: number
+  /** Annual material-cost rate for this line, as a percentage of its revenue. */
+  material_pct: number
 }
 
 export type ApprovalStatus = 'draft' | 'submitted' | 'approved' | 'rejected'

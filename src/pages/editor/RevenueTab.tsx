@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MonthGrid, { type CellUpdate, type GridRow } from '../../components/MonthGrid'
 import { monthLabels } from '../../lib/months'
+import { fmt } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { monthsOf, monthCols, type BudgetCtx } from '../../hooks/useBudget'
 import type { Customer, Team } from '../../lib/types'
@@ -10,11 +11,13 @@ interface RevLine {
   team_id: number | null
   customer_id: number | null
   months: number[]
+  material_pct: number
 }
 
 export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
   const { cycle, cc, accounts, canEdit, actuals, latestActualIdx } = budget
   const salesAccount = accounts.find((a) => a.input_type === 'revenue')
+  const materialAccount = accounts.find((a) => a.input_type === 'material_pct')
   const [teams, setTeams] = useState<Team[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [lines, setLines] = useState<RevLine[]>([])
@@ -43,6 +46,7 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
         team_id: r.team_id as number | null,
         customer_id: r.customer_id as number | null,
         months: monthsOf(r),
+        material_pct: Number(r.material_pct) || 0,
       })),
     )
     setLoaded(true)
@@ -83,6 +87,15 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
     })
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(flush, 600)
+  }
+
+  function setMatPct(id: number, pct: number) {
+    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, material_pct: pct } : l)))
+  }
+
+  async function persistMatPct(id: number, pct: number) {
+    const { error } = await supabase.from('budget_revenue_lines').update({ material_pct: pct }).eq('id', id)
+    if (error) setErr(error.message)
   }
 
   async function addLine() {
@@ -234,6 +247,81 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
         latestActualIdx={latestActualIdx}
         onChange={onChange}
       />
+
+      {materialAccount && (
+        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-3">
+          <h3 className="text-sm font-semibold text-sky-950">Material cost (% of revenue)</h3>
+          <p className="mb-2 text-sm text-slate-500">
+            Set a material-cost rate per line. Each line’s material cost = its annual revenue × the rate,
+            spread across the months in proportion to revenue. The total posts to the statement’s{' '}
+            <b>{materialAccount.name}</b> line ({materialAccount.code}).
+          </p>
+          <div className="overflow-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-sky-950 text-white">
+                  <th className="px-2 py-1.5 text-left font-medium">Team · Customer</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Annual Revenue</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Material %</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Material Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((l) => {
+                  const annual = l.months.reduce((s, v) => s + v, 0)
+                  const matCost = (annual * l.material_pct) / 100
+                  return (
+                    <tr key={`m${l.id}`} className="border-t border-slate-100">
+                      <td className="whitespace-nowrap px-2 py-1">
+                        <span className="font-medium">{teamName.get(l.team_id ?? -1) ?? 'Unassigned team'}</span>
+                        <span className="mx-1 text-slate-400">·</span>
+                        <span>{customerName.get(l.customer_id ?? -1) ?? 'General / other'}</span>
+                      </td>
+                      <td className="num-cell px-2 py-1">{fmt(annual)}</td>
+                      <td className="num-cell px-2 py-1">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          disabled={!canEdit}
+                          value={l.material_pct || ''}
+                          placeholder="0"
+                          onChange={(e) => setMatPct(l.id, Number(e.target.value) || 0)}
+                          onBlur={(e) => void persistMatPct(l.id, Number(e.target.value) || 0)}
+                          className="w-20 rounded border border-slate-300 px-2 py-1 text-right disabled:bg-slate-50 disabled:text-slate-400"
+                        />
+                        <span className="ml-1 text-slate-400">%</span>
+                      </td>
+                      <td className="num-cell px-2 py-1 font-medium">{fmt(matCost)}</td>
+                    </tr>
+                  )
+                })}
+                {!sorted.length && (
+                  <tr>
+                    <td colSpan={4} className="px-2 py-2 text-slate-400">
+                      Add revenue lines above to set material-cost rates.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {sorted.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-slate-300 bg-slate-100 font-semibold">
+                    <td className="px-2 py-1">Total → {materialAccount.name}</td>
+                    <td className="num-cell px-2 py-1">
+                      {fmt(sorted.reduce((s, l) => s + l.months.reduce((a, v) => a + v, 0), 0))}
+                    </td>
+                    <td className="px-2 py-1" />
+                    <td className="num-cell px-2 py-1">
+                      {fmt(sorted.reduce((s, l) => s + (l.months.reduce((a, v) => a + v, 0) * l.material_pct) / 100, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

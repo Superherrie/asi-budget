@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 scripts/seed-data.json
 scripts/.env
+
+# Supabase CLI local temp
+supabase/.temp/
