@@ -104,10 +104,10 @@ export default function BudgetEditor() {
       )}
 
       <nav className="mb-3 flex gap-1 border-b border-slate-200">
-        <NavLink to="" end className={tabClass}>Income Statement</NavLink>
-        <NavLink to="revenue" className={tabClass}>Revenue</NavLink>
-        <NavLink to="salaries" className={tabClass}>Salaries &amp; Cell Phones</NavLink>
-        <NavLink to="vehicles" className={tabClass}>Vehicles</NavLink>
+        <NavLink to={`/cc/${cc.code}`} end className={tabClass}>Income Statement</NavLink>
+        <NavLink to={`/cc/${cc.code}/revenue`} className={tabClass}>Revenue</NavLink>
+        <NavLink to={`/cc/${cc.code}/salaries`} className={tabClass}>Salaries &amp; Cell Phones</NavLink>
+        <NavLink to={`/cc/${cc.code}/vehicles`} className={tabClass}>Vehicles</NavLink>
       </nav>
 
       <Routes>
