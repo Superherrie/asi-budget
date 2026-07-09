@@ -28,7 +28,10 @@ const Q = async (query) => {
   return j
 }
 
+// ICS staff -> salary accounts; other companies (e.g. Hlanganisa) -> Consulting Fees.
 const CAT = { executive: '410000', sales: '212800', admin: '212500', operations: '212600', 'operations admin': '212700' }
+const CONSULT = { executive: '407300', sales: '407100', admin: '407000', operations: '407200', 'operations admin': '407000' }
+const isIcs = (c) => (c || '').trim().toLowerCase() === 'asi connect ics'
 
 const csvPath = process.argv[2]
 if (!csvPath) { console.error('Usage: node scripts/import-payroll.mjs "<payroll.csv>"'); process.exit(1) }
@@ -36,7 +39,7 @@ if (!csvPath) { console.error('Usage: node scripts/import-payroll.mjs "<payroll.
 const [cyc] = await Q('select id from budget_cycles where fy_year=2027')
 const ccs = await Q('select id, code from budget_cost_centres')
 const ccMap = new Map(ccs.map((c) => [String(c.code).toUpperCase(), c.id]))
-const accs = await Q("select id, code from budget_accounts where input_type='salary'")
+const accs = await Q('select id, code from budget_accounts')
 const accMap = new Map(accs.map((a) => [String(a.code), a.id]))
 
 let rows = readFileSync(csvPath, 'utf8').replace(/\r/g, '').split('\n').filter((l) => l.trim()).map((l) => l.split(','))
@@ -49,7 +52,8 @@ const skips = []
 for (const [i, r] of rows.entries()) {
   const cc = ccMap.get((r[4] || '').toUpperCase())
   const name = `${r[1] || ''} ${r[2] || ''}`.trim().replace(/\s+/g, ' ')
-  const acc = accMap.get(CAT[(r[5] || '').trim().toLowerCase()])
+  const catMap = isIcs(r[3]) ? CAT : CONSULT
+  const acc = accMap.get(catMap[(r[5] || '').trim().toLowerCase()])
   if (!cc) { skips.push(`row ${i + 1}: unknown branch ${r[4]}`); continue }
   if (!name) { skips.push(`row ${i + 1}: no name`); continue }
   if (!acc) { skips.push(`row ${i + 1}: unknown category ${r[5]}`); continue }

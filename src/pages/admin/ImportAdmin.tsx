@@ -8,7 +8,7 @@ type Kind = 'payroll' | 'employees' | 'vehicles' | 'customers' | 'teams'
 const TEMPLATES: Record<Kind, { header: string; hint: string }> = {
   payroll: {
     header: 'emp_no,first_name,surname,company,branch,category,position,date_employed,monthly_ctc,annual_ctc',
-    hint: 'Upload a payroll export. Maps branch → cost centre, category → salary account (VIP), and seeds each salary from monthly_ctc. Everyone is imported by branch, across all companies.',
+    hint: 'Upload a payroll export. Maps branch → cost centre and seeds each cost from monthly_ctc. ASI Connect ICS staff post to salary accounts (VIP) by category; other companies (e.g. Hlanganisa) post to Consulting Fees by category. Everyone is imported by branch.',
   },
   employees: {
     header: 'cc_code,name,title,salary_account_code,monthly_salary,cellphone_account_code,monthly_cell',
@@ -27,6 +27,18 @@ const PAYROLL_SALARY_ACCT: Record<string, string> = {
   operations: '212600', // Salaries VIP - Ops Cabling (cost of sales)
   'operations admin': '212700', // Salaries VIP - Ops Admin
 }
+
+/** Managed-services (non-ICS) staff post to Consulting Fees by category instead of salaries. */
+const PAYROLL_CONSULTING_ACCT: Record<string, string> = {
+  executive: '407300', // Consulting Fees - Exec
+  sales: '407100', // Consulting Fees - Sales
+  admin: '407000', // Consulting Fees - Admin
+  operations: '407200', // Consulting Fees - Ops Cabling
+  'operations admin': '407000', // no Ops Admin consulting account — fall back to Admin
+}
+
+/** Company is ASI Connect ICS -> salaries; anything else (e.g. Hlanganisa) -> consulting fees. */
+const isIcsCompany = (company: string) => company.trim().toLowerCase() === 'asi connect ics'
 
 /** Minimal CSV line parser with quote support. */
 function parseCsv(text: string): string[][] {
@@ -98,10 +110,11 @@ export default function ImportAdmin() {
           const name = `${row[1] ?? ''} ${row[2] ?? ''}`.trim().replace(/\s+/g, ' ')
           if (!name) { out.push(`Row ${i + 1}: missing name — skipped`); continue }
           const category = (row[5] ?? '').trim().toLowerCase()
-          const salCode = PAYROLL_SALARY_ACCT[category]
+          const acctMapForRow = isIcsCompany(row[3] ?? '') ? PAYROLL_SALARY_ACCT : PAYROLL_CONSULTING_ACCT
+          const salCode = acctMapForRow[category]
           if (!salCode) { out.push(`Row ${i + 1}: ${name}: unknown category "${row[5]}" — skipped`); continue }
           const salAcc = accMap.get(salCode)
-          if (!salAcc) { out.push(`Row ${i + 1}: ${name}: salary account ${salCode} not in chart — skipped`); continue }
+          if (!salAcc) { out.push(`Row ${i + 1}: ${name}: account ${salCode} not in chart — skipped`); continue }
           const key = `${ccId}|${name.toLowerCase()}`
           if (seen.has(key)) { out.push(`Row ${i + 1}: ${name} already in ${branch} — skipped (duplicate)`); continue }
           try {

@@ -167,6 +167,10 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   }
 
   function accountSelect(line: EmpLine, options: typeof salaryAccounts) {
+    // include the line's current account even if it isn't a salary/cell account
+    // (e.g. managed-services staff posted to Consulting Fees) so it displays.
+    const current = accounts.find((a) => a.id === line.account_id)
+    const opts = current && !options.some((a) => a.id === current.id) ? [...options, current] : options
     return (
       <select
         value={line.account_id}
@@ -175,7 +179,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
         onMouseDown={(e) => e.stopPropagation()}
         className="max-w-44 rounded border border-slate-200 px-1 py-0.5 text-[11px] text-slate-500"
       >
-        {options.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        {opts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select>
     )
   }
