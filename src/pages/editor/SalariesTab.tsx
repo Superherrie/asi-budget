@@ -30,7 +30,6 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   const [fTitle, setFTitle] = useState('')
   const [fSalAcc, setFSalAcc] = useState('')
   const [fSalary, setFSalary] = useState('')
-  const [fCellAcc, setFCellAcc] = useState('')
   const [fCell, setFCell] = useState('')
   const pending = useRef(new Map<number, number[]>())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -116,12 +115,15 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
       employee_id: emp.id, kind: 'salary', account_id: Number(fSalAcc),
       ...monthCols(Array(12).fill(-Math.abs(salary))),
     }] as Record<string, unknown>[]
-    if (fCellAcc) {
+    if (fCell.trim()) {
       const cell = parseAmount(fCell) ?? 0
-      inserts.push({
-        employee_id: emp.id, kind: 'cellphone', account_id: Number(fCellAcc),
-        ...monthCols(Array(12).fill(-Math.abs(cell))),
-      })
+      const cellAcc = cellAccountForCategory(catSuffix(accById.get(Number(fSalAcc))?.name ?? ''))
+      if (cellAcc) {
+        inserts.push({
+          employee_id: emp.id, kind: 'cellphone', account_id: cellAcc,
+          ...monthCols(Array(12).fill(-Math.abs(cell))),
+        })
+      }
     }
     const { error: e2 } = await supabase.from('budget_employee_lines').insert(inserts)
     if (e2) setErr(e2.message)
@@ -138,8 +140,17 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
 
   async function setLineAccount(lineId: number, accountId: number) {
     const { error } = await supabase.from('budget_employee_lines').update({ account_id: accountId }).eq('id', lineId)
-    if (error) setErr(error.message)
+    if (error) { setErr(error.message); return }
     setLines((prev) => prev.map((l) => (l.id === lineId ? { ...l, account_id: accountId } : l)))
+    // when a salary account changes, re-link that employee's cell phone to the matching category
+    const salLine = lines.find((l) => l.id === lineId && l.kind === 'salary')
+    if (!salLine) return
+    const cellId = cellAccountForCategory(catSuffix(accById.get(accountId)?.name ?? ''))
+    const cellLine = lines.find((l) => l.employee_id === salLine.employee_id && l.kind === 'cellphone')
+    if (cellLine && cellId && cellId !== cellLine.account_id) {
+      await supabase.from('budget_employee_lines').update({ account_id: cellId }).eq('id', cellLine.id)
+      setLines((prev) => prev.map((l) => (l.id === cellLine.id ? { ...l, account_id: cellId } : l)))
+    }
   }
 
   async function setTeam(employeeId: number, teamIdStr: string) {
@@ -159,9 +170,10 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   }
 
   async function addCellLine(emp: Employee) {
-    if (!cellAccounts.length) return
+    const accId = cellAccountFor(emp)
+    if (!accId) return
     const { error } = await supabase.from('budget_employee_lines').insert({
-      employee_id: emp.id, kind: 'cellphone', account_id: cellAccounts[0].id,
+      employee_id: emp.id, kind: 'cellphone', account_id: accId,
     })
     if (error) setErr(error.message)
     else await reload()
@@ -185,15 +197,22 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     )
   }
 
-  // Category = suffix of the employee's salary account name, e.g.
-  // "Salaries VIP - Ops Cabling" -> "Ops Cabling", "Consulting Fees - Admin" -> "Admin".
+  // Category = suffix of an account name, e.g. "Salaries VIP - Ops Cabling" ->
+  // "Ops Cabling", "Consulting Fees - Admin" -> "Admin".
+  const catSuffix = (name: string) => {
+    const i = name.lastIndexOf(' - ')
+    return i >= 0 ? name.slice(i + 3) : name
+  }
   const categoryOf = (emp: Employee): string => {
     const line = lines.find((l) => l.kind === 'salary' && l.employee_id === emp.id)
     const acc = line ? accById.get(line.account_id) : undefined
-    if (!acc) return 'Unassigned'
-    const i = acc.name.lastIndexOf(' - ')
-    return i >= 0 ? acc.name.slice(i + 3) : acc.name
+    return acc ? catSuffix(acc.name) : 'Unassigned'
   }
+  // Cell phone GL account is auto-linked to the employee's category (e.g. Ops
+  // Cabling -> Cell Phones - Ops Cabling), matched by account-name suffix.
+  const cellAccountForCategory = (cat: string) =>
+    cellAccounts.find((a) => catSuffix(a.name) === cat)?.id ?? cellAccounts[0]?.id
+  const cellAccountFor = (emp: Employee) => cellAccountForCategory(categoryOf(emp))
   const CATEGORY_ORDER = ['Ops Cabling', 'Sales', 'Admin', 'Ops Admin', 'Exec']
   const salaryGroups = (() => {
     const g = new Map<string, Employee[]>()
@@ -241,7 +260,13 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
             <span className="font-medium">{emp.name}</span>
             {emp.title && <span className="text-slate-400">{emp.title}</span>}
             {emp.is_new && <span className="rounded bg-green-100 px-1 text-[10px] font-semibold text-green-700">NEW</span>}
-            {accountSelect(line, opts)}
+            {kind === 'salary' ? (
+              accountSelect(line, opts)
+            ) : (
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500" title="Auto-linked to the employee’s category">
+                {accById.get(line.account_id)?.name ?? '—'}
+              </span>
+            )}
             {kind === 'salary' && (
               <select
                 value={memberships.get(emp.id!) ?? ''}
@@ -293,15 +318,9 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
             <input value={fSalary} onChange={(e) => setFSalary(e.target.value)} placeholder="35000" className="w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500">Cell account (optional)</label>
-            <select value={fCellAcc} onChange={(e) => setFCellAcc(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
-              <option value="">none</option>
-              {cellAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div>
             <label className="block text-xs font-medium text-slate-500">Cell / month</label>
             <input value={fCell} onChange={(e) => setFCell(e.target.value)} placeholder="600" className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" />
+            <p className="mt-0.5 text-[10px] text-slate-400">account auto-set by category</p>
           </div>
           <button onClick={() => void addEmployee()} className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
             Add employee
