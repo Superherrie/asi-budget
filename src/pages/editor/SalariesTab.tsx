@@ -18,6 +18,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   const { cycle, cc, accounts, canEdit, latestActualIdx } = budget
   const salaryAccounts = useMemo(() => accounts.filter((a) => a.input_type === 'salary'), [accounts])
   const cellAccounts = useMemo(() => accounts.filter((a) => a.input_type === 'cellphone'), [accounts])
+  const accById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [lines, setLines] = useState<EmpLine[]>([])
   const [memberships, setMemberships] = useState<Map<number, number>>(new Map()) // employee -> team
@@ -184,11 +185,33 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     )
   }
 
-  function gridFor(kind: 'salary' | 'cellphone'): GridRow[] {
+  // Category = suffix of the employee's salary account name, e.g.
+  // "Salaries VIP - Ops Cabling" -> "Ops Cabling", "Consulting Fees - Admin" -> "Admin".
+  const categoryOf = (emp: Employee): string => {
+    const line = lines.find((l) => l.kind === 'salary' && l.employee_id === emp.id)
+    const acc = line ? accById.get(line.account_id) : undefined
+    if (!acc) return 'Unassigned'
+    const i = acc.name.lastIndexOf(' - ')
+    return i >= 0 ? acc.name.slice(i + 3) : acc.name
+  }
+  const CATEGORY_ORDER = ['Ops Cabling', 'Sales', 'Admin', 'Ops Admin', 'Exec']
+  const salaryGroups = (() => {
+    const g = new Map<string, Employee[]>()
+    for (const emp of employees) {
+      const c = categoryOf(emp)
+      ;(g.get(c) ?? g.set(c, []).get(c)!).push(emp)
+    }
+    return [...g.entries()].sort(([a], [b]) => {
+      const ia = CATEGORY_ORDER.indexOf(a), ib = CATEGORY_ORDER.indexOf(b)
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b)
+    })
+  })()
+
+  function gridFor(kind: 'salary' | 'cellphone', emps: Employee[] = employees, totalLabel = 'Total'): GridRow[] {
     const opts = kind === 'salary' ? salaryAccounts : cellAccounts
     const rows: GridRow[] = []
     const totals = Array(12).fill(0) as number[]
-    for (const emp of employees) {
+    for (const emp of emps) {
       const line = lines.find((l) => l.employee_id === emp.id && l.kind === kind)
       if (!line) {
         if (kind === 'cellphone' && canEdit) {
@@ -237,7 +260,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
         values: line.months,
       })
     }
-    rows.push({ key: `tot_${kind}`, label: 'Total', display: totals, kind: 'subtotal', readOnly: true })
+    rows.push({ key: `tot_${kind}`, label: totalLabel, display: totals, kind: 'subtotal', readOnly: true })
     return rows
   }
 
@@ -285,16 +308,24 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
           </button>
         </div>
       )}
-      <div>
-        <h3 className="mb-1 text-sm font-semibold text-sky-950">Salaries</h3>
-        <MonthGrid
-          rows={gridFor('salary')}
-          monthHeaders={monthLabels(cycle.fy_year)}
-          labelHeader="Employee"
-          readOnly={!canEdit}
-          latestActualIdx={latestActualIdx}
-          onChange={onChange}
-        />
+      <div className="space-y-5">
+        <h3 className="text-sm font-semibold text-sky-950">Salaries by category</h3>
+        {salaryGroups.map(([cat, emps]) => (
+          <div key={cat}>
+            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {cat} <span className="text-slate-400">· {emps.length}</span>
+            </h4>
+            <MonthGrid
+              rows={gridFor('salary', emps, `Total ${cat}`)}
+              monthHeaders={monthLabels(cycle.fy_year)}
+              labelHeader="Employee"
+              readOnly={!canEdit}
+              latestActualIdx={latestActualIdx}
+              onChange={onChange}
+            />
+          </div>
+        ))}
+        {!employees.length && <p className="text-sm text-slate-400">No employees yet.</p>}
       </div>
       <div>
         <h3 className="mb-1 text-sm font-semibold text-sky-950">Cell Phones</h3>
