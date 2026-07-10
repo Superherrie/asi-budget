@@ -137,6 +137,7 @@ export default function StatementTab({ budget }: { budget: BudgetCtx }) {
             label: acc.name,
             values: line.months,
             fillBasis: fy26?.get(acc.id) ?? Array(12).fill(0),
+            costRow: acc.section !== 'sales',
           }
         }
         // direct account fed by per-employee detail (e.g. Consulting Fees) — read-only

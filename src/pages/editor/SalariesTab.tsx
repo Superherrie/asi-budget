@@ -283,6 +283,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
           </span>
         ),
         values: line.months,
+        costRow: true,
       })
     }
     rows.push({ key: `tot_${kind}`, label: totalLabel, display: totals, kind: 'subtotal', readOnly: true })
@@ -292,8 +293,8 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-500">
-        Salaries and cell phone costs are budgeted per employee (amounts are costs — enter negatives, e.g. -35 000).
-        Totals feed the matching statement lines per department account.
+        Salaries and cell phone costs are budgeted per employee. Enter positive amounts (e.g. 35 000) — the system
+        records them as costs. Totals feed the matching statement lines per department account.
       </p>
       {err && <p className="text-sm text-red-600">{err}</p>}
       {canEdit && (

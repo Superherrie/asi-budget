@@ -153,6 +153,7 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
         ),
         values: l.months,
         indent: 1,
+        costRow: true,
       })
     }
   }
@@ -162,7 +163,7 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
     <div>
       <p className="mb-2 text-sm text-slate-500">
         Vehicle running costs (fuel, maintenance, leases, tolls) are budgeted per vehicle and feed the M/V expense
-        lines of the statement. Amounts are costs — enter negatives.
+        lines of the statement. Enter positive amounts — the system records them as costs.
       </p>
       {err && <p className="mb-2 text-sm text-red-600">{err}</p>}
       {canEdit && (

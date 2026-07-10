@@ -20,6 +20,8 @@ export interface GridRow {
   context?: (number | null)[]
   /** Basis for fill tools, normally FY2026 actual months. */
   fillBasis?: number[]
+  /** Cost row: user types positive magnitudes; input is stored as negative. */
+  costRow?: boolean
 }
 
 export interface CellUpdate {
@@ -100,7 +102,8 @@ export default function MonthGrid({
 
   function commitEdit(move?: { dr: number; dc: number }) {
     if (!editing) return
-    const v = parseAmount(editing.text)
+    let v = parseAmount(editing.text)
+    if (v !== null && rows[editing.r].costRow) v = -Math.abs(v)
     if (v !== null && onChange) {
       onChange([{ rowKey: rows[editing.r].key, monthIdx: editing.c, value: v }])
     }
@@ -122,7 +125,9 @@ export default function MonthGrid({
   function startEdit(r: number, c: number, initial?: string) {
     if (!isEditable(r)) return
     const cur = rows[r].values![c]
-    setEditing({ r, c, text: initial ?? (cur === 0 ? '' : String(cur)) })
+    // cost rows are edited as positive magnitudes
+    const shown = rows[r].costRow ? Math.abs(cur) : cur
+    setEditing({ r, c, text: initial ?? (shown === 0 ? '' : String(shown)) })
   }
 
   // ----- clipboard -----
@@ -159,7 +164,8 @@ export default function MonthGrid({
       if (v !== null) {
         for (let r = selRect.r1; r <= selRect.r2; r++) {
           if (!isEditable(r)) continue
-          for (let c = selRect.c1; c <= selRect.c2; c++) updates.push({ rowKey: rows[r].key, monthIdx: c, value: v })
+          const val = rows[r].costRow ? -Math.abs(v) : v
+          for (let c = selRect.c1; c <= selRect.c2; c++) updates.push({ rowKey: rows[r].key, monthIdx: c, value: val })
         }
       }
     } else {
@@ -169,7 +175,7 @@ export default function MonthGrid({
         if (r >= rows.length) break
         line.forEach((v, j) => {
           const c = start.c + j
-          if (v !== null && c <= 11) updates.push({ rowKey: rows[r].key, monthIdx: c, value: v })
+          if (v !== null && c <= 11) updates.push({ rowKey: rows[r].key, monthIdx: c, value: rows[r].costRow ? -Math.abs(v) : v })
         })
         r++
       }
@@ -279,7 +285,7 @@ export default function MonthGrid({
         if (s === null) return
         const v = parseAmount(s)
         if (v === null) return
-        applyFill(() => Array(12).fill(v))
+        applyFill((row) => Array(12).fill(row.costRow ? -Math.abs(v) : v))
       },
     },
     {
@@ -290,7 +296,7 @@ export default function MonthGrid({
         if (s === null) return
         const v = parseAmount(s)
         if (v === null) return
-        applyFill(() => Array(12).fill(v / 12))
+        applyFill((row) => Array(12).fill(row.costRow ? -Math.abs(v / 12) : v / 12))
       },
     },
   ]
