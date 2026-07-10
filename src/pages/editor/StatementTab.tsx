@@ -25,6 +25,7 @@ const detailTab: Record<string, { path: string; label: string }> = {
   cellphone: { path: 'salaries', label: 'Salaries & Cell Phones' },
   vehicle: { path: 'vehicles', label: 'Vehicles' },
   material_pct: { path: 'revenue', label: 'Revenue (% of sales)' },
+  training: { path: 'training', label: 'Staff Training' },
 }
 
 const Z12 = Array(12).fill(0) as number[]
