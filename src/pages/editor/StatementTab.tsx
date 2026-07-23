@@ -156,6 +156,15 @@ export default function StatementTab({ budget }: { budget: BudgetCtx }) {
           kind: 'computed' as const,
         }
       }
+      if (acc.input_type === 'ho_alloc') {
+        return {
+          ...base,
+          label: <span>{acc.name} <span className="text-slate-400">(Head Office allocation)</span></span>,
+          display: line.months,
+          readOnly: true,
+          kind: 'computed' as const,
+        }
+      }
       const tab = detailTab[acc.input_type]
       return {
         ...base,

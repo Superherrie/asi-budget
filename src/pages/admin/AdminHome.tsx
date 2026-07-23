@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import UsersAdmin from './UsersAdmin'
 import CostCentresAdmin from './CostCentresAdmin'
 import ImportAdmin from './ImportAdmin'
+import HoAllocationAdmin from './HoAllocationAdmin'
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
   `border-b-2 px-3 py-2 text-sm font-medium ${
@@ -21,11 +22,13 @@ export default function AdminHome() {
         <NavLink to="" end className={tabClass}>Users &amp; Access</NavLink>
         <NavLink to="cost-centres" className={tabClass}>Cost Centres</NavLink>
         <NavLink to="import" className={tabClass}>Import Data</NavLink>
+        <NavLink to="ho-allocation" className={tabClass}>HO Allocation</NavLink>
       </nav>
       <Routes>
         <Route index element={<UsersAdmin />} />
         <Route path="cost-centres" element={<CostCentresAdmin />} />
         <Route path="import" element={<ImportAdmin />} />
+        <Route path="ho-allocation" element={<HoAllocationAdmin />} />
       </Routes>
     </div>
   )
