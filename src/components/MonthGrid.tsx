@@ -346,14 +346,14 @@ export default function MonthGrid({
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10">
             <tr className="bg-sky-950 text-white">
-              <th className="sticky left-0 z-20 min-w-56 bg-sky-950 px-2 py-1.5 text-left font-medium">{labelHeader}</th>
+              <th className="sticky left-0 z-20 w-52 min-w-52 max-w-52 bg-sky-950 px-2 py-1.5 text-left font-medium">{labelHeader}</th>
               {contextHeaders.map((h) => (
-                <th key={h} className="min-w-20 px-2 py-1.5 text-right font-medium text-sky-300">{h}</th>
+                <th key={h} className="min-w-16 px-1 py-1.5 text-right font-medium text-sky-300">{h}</th>
               ))}
               {monthHeaders.map((h) => (
-                <th key={h} className="min-w-20 px-2 py-1.5 text-right font-medium">{h}</th>
+                <th key={h} className="min-w-16 px-1 py-1.5 text-right font-medium">{h}</th>
               ))}
-              <th className="min-w-24 px-2 py-1.5 text-right font-medium">Total</th>
+              <th className="min-w-16 px-1 py-1.5 text-right font-medium">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -365,18 +365,18 @@ export default function MonthGrid({
               return (
                 <tr key={row.key} className={`border-t border-slate-100 ${rowStyles[kind]}`}>
                   <td
-                    className={`sticky left-0 z-[5] whitespace-nowrap border-r border-slate-200 px-2 py-1 ${labelStyles[kind]}`}
+                    className={`sticky left-0 z-[5] w-52 min-w-52 max-w-52 break-words border-r border-slate-200 px-2 py-1 ${labelStyles[kind]}`}
                     style={{ paddingLeft: `${8 + (row.indent ?? 0) * 14}px` }}
                   >
                     {row.label}
                   </td>
                   {Array.from({ length: nCtx }).map((_, ci) => (
-                    <td key={ci} className="num-cell px-2 py-1 text-slate-400">
+                    <td key={ci} className="num-cell px-1 py-1 text-slate-400">
                       {row.context?.[ci] != null ? fmtCell(row.context[ci]) : ''}
                     </td>
                   ))}
                   {kind === 'section' ? (
-                    <td colSpan={13} className="px-2 py-1" />
+                    <td colSpan={13} className="px-1 py-1" />
                   ) : (
                     <>
                       {Array.from({ length: 12 }).map((_, c) => {
@@ -386,7 +386,7 @@ export default function MonthGrid({
                         return (
                           <td
                             key={c}
-                            className={`num-cell border-l border-slate-100 px-2 py-1 ${
+                            className={`num-cell border-l border-slate-100 px-1 py-1 ${
                               editable ? 'cursor-cell' : 'text-slate-500'
                             } ${inSel(r, c) && editable ? 'bg-sky-100' : ''} ${
                               focused && editable ? 'ring-2 ring-inset ring-sky-500' : ''
@@ -427,7 +427,7 @@ export default function MonthGrid({
                           </td>
                         )
                       })}
-                      <td className="num-cell border-l border-slate-200 px-2 py-1 font-medium">
+                      <td className="num-cell border-l border-slate-200 px-1 py-1 font-medium">
                         {total != null && kind !== 'pct' ? fmt(total) : ''}
                       </td>
                     </>
