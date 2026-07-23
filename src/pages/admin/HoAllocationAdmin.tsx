@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import MonthGrid, { type CellUpdate, type GridRow } from '../../components/MonthGrid'
-import { monthLabels } from '../../lib/months'
+import { monthLabels, monthLabel } from '../../lib/months'
 import { monthsOf, monthCols } from '../../hooks/useBudget'
 import { supabase } from '../../lib/supabase'
 import type { CostCentre, Cycle } from '../../lib/types'
@@ -9,6 +9,8 @@ export default function HoAllocationAdmin() {
   const [cycle, setCycle] = useState<Cycle | null>(null)
   const [branches, setBranches] = useState<CostCentre[]>([])
   const [alloc, setAlloc] = useState<Map<number, number[]>>(new Map()) // cost_centre_id -> months
+  const [actuals, setActuals] = useState<Map<number, number[]>>(new Map()) // Admin Fee FY2026 actuals
+  const [lastIdx, setLastIdx] = useState(0) // index of the last actual month
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -21,14 +23,27 @@ export default function HoAllocationAdmin() {
         .order('fy_year', { ascending: false }).limit(1).maybeSingle()).data as Cycle | null
       if (!cyc) { setLoaded(true); return }
       setCycle(cyc)
-      const [ccRes, allocRes] = await Promise.all([
+      const feeAcc = (await supabase.from('budget_accounts').select('id').eq('code', '400000').maybeSingle()).data
+      const [ccRes, allocRes, actRes] = await Promise.all([
         supabase.from('budget_cost_centres').select('*').eq('type', 'branch').eq('active', true).order('code'),
         supabase.from('budget_ho_allocations').select('*').eq('cycle_id', cyc.id),
+        feeAcc
+          ? supabase.from('budget_actuals').select('*').eq('fy_year', 2026).eq('account_id', feeAcc.id)
+          : Promise.resolve({ data: [] as Record<string, unknown>[] }),
       ])
       setBranches((ccRes.data as CostCentre[]) ?? [])
       const m = new Map<number, number[]>()
       for (const r of allocRes.data ?? []) m.set(r.cost_centre_id as number, monthsOf(r))
       setAlloc(m)
+      const am = new Map<number, number[]>()
+      let idx = 0
+      for (const r of actRes.data ?? []) {
+        const months = monthsOf(r)
+        am.set(r.cost_centre_id as number, months)
+        for (let i = 11; i >= 0; i--) if (months[i] !== 0) { idx = Math.max(idx, i); break }
+      }
+      setActuals(am)
+      setLastIdx(idx)
       setLoaded(true)
     })()
   }, [])
@@ -65,10 +80,13 @@ export default function HoAllocationAdmin() {
   }
 
   const recovery = Array(12).fill(0) as number[]
+  let actualTotal = 0
   const rows: GridRow[] = branches.map((b) => {
     const months = alloc.get(b.id) ?? Array(12).fill(0)
     months.forEach((v, i) => (recovery[i] += v))
-    return { key: `cc${b.id}`, label: `${b.code} — ${b.name}`, values: months }
+    const act = actuals.get(b.id)?.[lastIdx] ?? 0 // stored negative
+    if (act) actualTotal += -act
+    return { key: `cc${b.id}`, label: `${b.code} — ${b.name}`, values: months, context: [act ? -act : null] }
   })
   rows.push({
     key: 'recovery',
@@ -76,7 +94,9 @@ export default function HoAllocationAdmin() {
     display: recovery,
     kind: 'subtotal',
     readOnly: true,
+    context: [actualTotal || null],
   })
+  const actualHeader = `${monthLabel(2026, lastIdx)} actual`
 
   return (
     <div>
@@ -89,6 +109,7 @@ export default function HoAllocationAdmin() {
       <MonthGrid
         rows={rows}
         monthHeaders={monthLabels(cycle.fy_year)}
+        contextHeaders={[actualHeader]}
         labelHeader="Branch"
         onChange={onChange}
         toolbarExtra={
