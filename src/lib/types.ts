@@ -50,7 +50,7 @@ export type AccountSection =
   | 'exceptional'
   | 'finance'
 
-export type InputType = 'direct' | 'revenue' | 'salary' | 'cellphone' | 'vehicle' | 'material_pct' | 'training' | 'ho_alloc'
+export type InputType = 'direct' | 'revenue' | 'salary' | 'cellphone' | 'vehicle' | 'material_pct' | 'training' | 'ho_alloc' | 'subcontractor'
 
 export interface Account {
   id: number
@@ -141,6 +141,14 @@ export interface TrainingLine {
   provider: string
   month: number // 1 = July
   amount: number // positive cost
+}
+
+export interface SubcontractorLine extends Partial<MonthValues> {
+  id?: number
+  cycle_id: number
+  cost_centre_id: number
+  name: string
+  kind: 'electrical' | 'data'
 }
 
 export type ApprovalStatus = 'draft' | 'submitted' | 'approved' | 'rejected'

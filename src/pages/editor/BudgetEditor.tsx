@@ -8,6 +8,7 @@ import RevenueTab from './RevenueTab'
 import SalariesTab from './SalariesTab'
 import VehiclesTab from './VehiclesTab'
 import TrainingTab from './TrainingTab'
+import SubcontractorsTab from './SubcontractorsTab'
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
   `border-b-2 px-3 py-2 text-sm font-medium ${
@@ -110,6 +111,7 @@ export default function BudgetEditor() {
         <NavLink to={`/cc/${cc.code}/salaries`} className={tabClass}>Salaries &amp; Cell Phones</NavLink>
         <NavLink to={`/cc/${cc.code}/vehicles`} className={tabClass}>Vehicles</NavLink>
         <NavLink to={`/cc/${cc.code}/training`} className={tabClass}>Staff Training</NavLink>
+        <NavLink to={`/cc/${cc.code}/subcontractors`} className={tabClass}>Subcontractors</NavLink>
       </nav>
 
       <Routes>
@@ -118,6 +120,7 @@ export default function BudgetEditor() {
         <Route path="salaries" element={<SalariesTab budget={budget} />} />
         <Route path="vehicles" element={<VehiclesTab budget={budget} />} />
         <Route path="training" element={<TrainingTab budget={budget} />} />
+        <Route path="subcontractors" element={<SubcontractorsTab budget={budget} />} />
       </Routes>
     </div>
   )
