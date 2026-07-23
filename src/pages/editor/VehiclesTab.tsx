@@ -12,17 +12,31 @@ interface VehLine {
   months: number[]
 }
 
+const CAT_ORDER = ['Ops Cabling', 'Sales', 'Admin', 'Ops Admin', 'Exec']
+// M/V account name is "M/V Exp - <cost type> - <category>"
+const catSuffix = (name: string) => { const p = name.split(' - '); return p[p.length - 1] }
+const costTypeOf = (name: string) => { const p = name.split(' - '); return p.length >= 3 ? p[1] : name }
+
 export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
   const { cycle, cc, accounts, canEdit, latestActualIdx } = budget
   const vehicleAccounts = useMemo(() => accounts.filter((a) => a.input_type === 'vehicle'), [accounts])
+  const accById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts])
+  const categories = useMemo(() => {
+    const set = new Set(vehicleAccounts.map((a) => catSuffix(a.name)))
+    return [...set].sort((a, b) => {
+      const ia = CAT_ORDER.indexOf(a), ib = CAT_ORDER.indexOf(b)
+      return (ia < 0 ? 9 : ia) - (ib < 0 ? 9 : ib)
+    })
+  }, [vehicleAccounts])
+  const accountsForCategory = (cat: string) =>
+    vehicleAccounts.filter((a) => catSuffix(a.name) === cat).sort((a, b) => a.sort_order - b.sort_order)
+
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [lines, setLines] = useState<VehLine[]>([])
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [fReg, setFReg] = useState('')
   const [fDesc, setFDesc] = useState('')
-  const [addVehicleId, setAddVehicleId] = useState('')
-  const [addAccountId, setAddAccountId] = useState('')
   const pending = useRef(new Map<number, number[]>())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -84,32 +98,39 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
   async function addVehicle() {
     setErr(null)
     if (!fReg.trim()) { setErr('Registration is required.'); return }
-    const { error } = await supabase.from('budget_vehicles')
-      .insert({ cost_centre_id: cc!.id, registration: fReg.trim().toUpperCase(), description: fDesc.trim() })
-    if (error) setErr(error.message)
+    const { data: veh, error } = await supabase.from('budget_vehicles')
+      .insert({ cost_centre_id: cc!.id, registration: fReg.trim().toUpperCase(), description: fDesc.trim(), category: 'Ops Cabling' })
+      .select().single()
+    if (error || !veh) { setErr(error?.message ?? 'Insert failed'); return }
+    const inserts = accountsForCategory('Ops Cabling').map((a) => ({ cycle_id: cycle!.id, vehicle_id: veh.id, account_id: a.id }))
+    if (inserts.length) {
+      const { error: e2 } = await supabase.from('budget_vehicle_lines').insert(inserts)
+      if (e2) setErr(e2.message)
+    }
     setFReg(''); setFDesc('')
     await reload()
   }
 
-  async function addLine() {
+  async function setCategory(veh: Vehicle, newCat: string) {
+    if (newCat === veh.category) return
     setErr(null)
-    if (!addVehicleId || !addAccountId) { setErr('Choose a vehicle and an expense account.'); return }
-    if (lines.some((l) => l.vehicle_id === Number(addVehicleId) && l.account_id === Number(addAccountId))) {
-      setErr('That vehicle already has a line for this expense account.')
-      return
+    // carry existing amounts across the category change, keyed by cost type
+    const byType = new Map<string, number[]>()
+    for (const l of lines.filter((l) => l.vehicle_id === veh.id)) {
+      const acc = accById.get(l.account_id)
+      if (acc) byType.set(costTypeOf(acc.name), l.months)
     }
-    const { error } = await supabase.from('budget_vehicle_lines').insert({
-      cycle_id: cycle!.id, vehicle_id: Number(addVehicleId), account_id: Number(addAccountId),
-    })
-    if (error) setErr(error.message)
-    else await reload()
-  }
-
-  async function removeLine(id: number) {
-    if (!window.confirm('Remove this expense line?')) return
-    const { error } = await supabase.from('budget_vehicle_lines').delete().eq('id', id)
-    if (error) setErr(error.message)
-    else setLines((prev) => prev.filter((l) => l.id !== id))
+    await supabase.from('budget_vehicle_lines').delete().eq('cycle_id', cycle!.id).eq('vehicle_id', veh.id!)
+    const inserts = accountsForCategory(newCat).map((a) => ({
+      cycle_id: cycle!.id, vehicle_id: veh.id, account_id: a.id,
+      ...monthCols(byType.get(costTypeOf(a.name)) ?? Array(12).fill(0)),
+    }))
+    if (inserts.length) {
+      const { error } = await supabase.from('budget_vehicle_lines').insert(inserts)
+      if (error) setErr(error.message)
+    }
+    await supabase.from('budget_vehicles').update({ category: newCat }).eq('id', veh.id!)
+    await reload()
   }
 
   async function retireVehicle(veh: Vehicle) {
@@ -119,17 +140,27 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
     else await reload()
   }
 
-  const accName = new Map(vehicleAccounts.map((a) => [a.id, a.name]))
   const rows: GridRow[] = []
   const totals = Array(12).fill(0) as number[]
   for (const veh of vehicles) {
     const vehLines = lines.filter((l) => l.vehicle_id === veh.id)
+      .sort((a, b) => (accById.get(a.account_id)?.sort_order ?? 0) - (accById.get(b.account_id)?.sort_order ?? 0))
     rows.push({
       key: `veh${veh.id}`,
       label: (
         <span className="inline-flex items-center gap-2">
           <span className="font-semibold">{veh.registration}</span>
           {veh.description && <span className="text-slate-400">{veh.description}</span>}
+          <select
+            value={veh.category}
+            disabled={!canEdit}
+            onChange={(e) => void setCategory(veh, e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[11px] text-slate-600"
+            title="Cost category — sets which M/V accounts these costs post to"
+          >
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
           {canEdit && (
             <button onClick={() => void retireVehicle(veh)} className="rounded border border-slate-300 px-1.5 text-[11px] text-slate-500 hover:bg-red-50">
               retire
@@ -143,14 +174,7 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
       l.months.forEach((v, i) => (totals[i] += v))
       rows.push({
         key: `v${l.id}`,
-        label: (
-          <span className="inline-flex items-center gap-2">
-            {canEdit && (
-              <button onClick={() => void removeLine(l.id)} title="Remove line" className="text-red-400 hover:text-red-600">✕</button>
-            )}
-            {accName.get(l.account_id) ?? `account ${l.account_id}`}
-          </span>
-        ),
+        label: <span className="text-slate-600">{costTypeOf(accById.get(l.account_id)?.name ?? '')}</span>,
         values: l.months,
         indent: 1,
         costRow: true,
@@ -162,8 +186,8 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
   return (
     <div>
       <p className="mb-2 text-sm text-slate-500">
-        Vehicle running costs (fuel, maintenance, leases, tolls) are budgeted per vehicle and feed the M/V expense
-        lines of the statement. Enter positive amounts — the system records them as costs.
+        Each vehicle has its running-cost GL lines (fuel, maintenance, lease, tolls, surveillance) ready to budget —
+        enter positive amounts. Set a vehicle’s <b>category</b> to post its costs to the matching M/V accounts.
       </p>
       {err && <p className="mb-2 text-sm text-red-600">{err}</p>}
       {canEdit && (
@@ -174,35 +198,18 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500">Description</label>
-            <input value={fDesc} onChange={(e) => setFDesc(e.target.value)} placeholder="Toyota Hilux — J Smith" className="w-52 rounded border border-slate-300 px-2 py-1 text-sm" />
+            <input value={fDesc} onChange={(e) => setFDesc(e.target.value)} placeholder="2022 Toyota Hilux" className="w-52 rounded border border-slate-300 px-2 py-1 text-sm" />
           </div>
           <button onClick={() => void addVehicle()} className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
             Add vehicle
           </button>
-          <span className="mx-3 h-8 w-px bg-slate-200" />
-          <div>
-            <label className="block text-xs font-medium text-slate-500">Vehicle</label>
-            <select value={addVehicleId} onChange={(e) => setAddVehicleId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
-              <option value="">choose…</option>
-              {vehicles.map((v) => <option key={v.id} value={v.id}>{v.registration}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500">Expense account</label>
-            <select value={addAccountId} onChange={(e) => setAddAccountId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
-              <option value="">choose…</option>
-              {vehicleAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <button onClick={() => void addLine()} className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
-            Add expense line
-          </button>
+          <span className="text-xs text-slate-400">New vehicles start in the Ops Cabling category with all cost lines ready.</span>
         </div>
       )}
       <MonthGrid
         rows={rows}
         monthHeaders={monthLabels(cycle.fy_year)}
-        labelHeader="Vehicle / expense"
+        labelHeader="Vehicle / cost"
         readOnly={!canEdit}
         latestActualIdx={latestActualIdx}
         onChange={onChange}

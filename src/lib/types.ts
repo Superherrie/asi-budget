@@ -98,6 +98,8 @@ export interface Vehicle {
   registration: string
   description: string
   active: boolean
+  /** Cost category (Ops Cabling / Sales / Admin / Ops Admin / Exec) — picks the M/V accounts. */
+  category: string
 }
 
 export interface VehicleLine extends Partial<MonthValues> {
