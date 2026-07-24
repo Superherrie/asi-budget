@@ -145,6 +145,14 @@ export interface TrainingLine {
   amount: number // positive cost
 }
 
+/** Allocation of the team-budgeted revenue total to customers (does not feed the GL). */
+export interface RevenueCustomerLine extends Partial<MonthValues> {
+  id?: number
+  cycle_id: number
+  cost_centre_id: number
+  customer_id: number
+}
+
 export interface SubcontractorLine extends Partial<MonthValues> {
   id?: number
   cycle_id: number
