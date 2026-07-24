@@ -5,6 +5,8 @@ export interface Profile {
   email: string
   full_name: string
   is_admin: boolean
+  /** true when the password was set for them and must be changed before continuing. */
+  must_change_password: boolean
 }
 
 export type CcRole = 'compiler' | 'approver'

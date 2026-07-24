@@ -114,7 +114,8 @@ for (const r of rows) {
       created++
     }
     const { error: pErr } = await sb.from('budget_profiles').upsert(
-      { user_id: userId, email: r.email, full_name: r.fullName, is_admin: r.isAdmin },
+      // password was set for them, so make them choose their own at first login
+      { user_id: userId, email: r.email, full_name: r.fullName, is_admin: r.isAdmin, must_change_password: true },
       { onConflict: 'user_id' },
     )
     if (pErr) throw pErr

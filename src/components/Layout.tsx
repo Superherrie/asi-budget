@@ -1,5 +1,6 @@
 import { NavLink, Outlet, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import ChangePassword from '../pages/ChangePassword'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${
@@ -34,6 +35,11 @@ export default function Layout() {
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm text-sky-200">
             <span>{profile?.full_name || session.user.email}</span>
+            {!profile?.must_change_password && (
+              <NavLink to="/change-password" className="rounded-md border border-sky-700 px-2 py-1 hover:bg-sky-800">
+                Change password
+              </NavLink>
+            )}
             <button
               onClick={() => void signOut()}
               className="rounded-md border border-sky-700 px-2 py-1 hover:bg-sky-800"
@@ -44,7 +50,8 @@ export default function Layout() {
         </div>
       </header>
       <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-4">
-        <Outlet />
+        {/* password was set for them — nothing else is reachable until it's changed */}
+        {profile?.must_change_password ? <ChangePassword forced /> : <Outlet />}
       </main>
     </div>
   )
