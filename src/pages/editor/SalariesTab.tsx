@@ -190,7 +190,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
         disabled={!canEdit}
         onChange={(e) => void setLineAccount(line.id, Number(e.target.value))}
         onMouseDown={(e) => e.stopPropagation()}
-        className="max-w-44 rounded border border-slate-200 px-1 py-0.5 text-[11px] text-slate-500"
+        className="max-w-36 rounded border border-slate-200 px-1 py-0.5 text-[11px] text-slate-500"
       >
         {opts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select>
@@ -253,7 +253,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
       rows.push({
         key: `l${line.id}`,
         label: (
-          <span className="inline-flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {canEdit && kind === 'salary' && (
               <button onClick={() => void removeEmployee(emp)} title="Remove employee" className="text-red-400 hover:text-red-600">✕</button>
             )}
@@ -273,7 +273,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
                 disabled={!canEdit}
                 onChange={(e) => void setTeam(emp.id!, e.target.value)}
                 onMouseDown={(e) => e.stopPropagation()}
-                className="max-w-28 rounded border border-slate-200 px-1 py-0.5 text-[11px] text-slate-500"
+                className="max-w-24 rounded border border-slate-200 px-1 py-0.5 text-[11px] text-slate-500"
                 title="Revenue team"
               >
                 <option value="">no team</option>
@@ -339,6 +339,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
               rows={gridFor('salary', emps, `Total ${cat}`)}
               monthHeaders={monthLabels(cycle.fy_year)}
               labelHeader="Employee"
+              labelWidth="17rem"
               readOnly={!canEdit}
               latestActualIdx={latestActualIdx}
               onChange={onChange}
@@ -353,6 +354,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
           rows={gridFor('cellphone')}
           monthHeaders={monthLabels(cycle.fy_year)}
           labelHeader="Employee"
+          labelWidth="17rem"
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
           onChange={onChange}

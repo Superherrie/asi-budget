@@ -40,6 +40,8 @@ interface Props {
   latestActualIdx?: number
   onChange?: (updates: CellUpdate[]) => void
   labelHeader?: string
+  /** Width of the sticky label column (CSS length). Widen it for rich labels. */
+  labelWidth?: string
   /** Extra toolbar content rendered to the right of fill tools. */
   toolbarExtra?: ReactNode
 }
@@ -68,8 +70,9 @@ const labelStyles: Record<GridRowKind, string> = {
 
 export default function MonthGrid({
   rows, monthHeaders, contextHeaders = [], readOnly = false,
-  latestActualIdx = 11, onChange, labelHeader = '', toolbarExtra,
+  latestActualIdx = 11, onChange, labelHeader = '', labelWidth = '13rem', toolbarExtra,
 }: Props) {
+  const labelCol = { width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }
   const [sel, setSel] = useState<Sel | null>(null)
   const [editing, setEditing] = useState<{ r: number; c: number; text: string } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -346,7 +349,7 @@ export default function MonthGrid({
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10">
             <tr className="bg-sky-950 text-white">
-              <th className="sticky left-0 z-20 w-52 min-w-52 max-w-52 bg-sky-950 px-2 py-1.5 text-left font-medium">{labelHeader}</th>
+              <th style={labelCol} className="sticky left-0 z-20 bg-sky-950 px-2 py-1.5 text-left font-medium">{labelHeader}</th>
               {contextHeaders.map((h) => (
                 <th key={h} className="min-w-16 px-1 py-1.5 text-right font-medium text-sky-300">{h}</th>
               ))}
@@ -365,8 +368,8 @@ export default function MonthGrid({
               return (
                 <tr key={row.key} className={`border-t border-slate-100 ${rowStyles[kind]}`}>
                   <td
-                    className={`sticky left-0 z-[5] w-52 min-w-52 max-w-52 break-words border-r border-slate-200 px-2 py-1 ${labelStyles[kind]}`}
-                    style={{ paddingLeft: `${8 + (row.indent ?? 0) * 14}px` }}
+                    className={`sticky left-0 z-[5] break-words border-r border-slate-200 px-2 py-1 ${labelStyles[kind]}`}
+                    style={{ ...labelCol, paddingLeft: `${8 + (row.indent ?? 0) * 14}px` }}
                   >
                     {row.label}
                   </td>

@@ -148,7 +148,7 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
     rows.push({
       key: `veh${veh.id}`,
       label: (
-        <span className="inline-flex items-center gap-2">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="font-semibold">{veh.registration}</span>
           {veh.description && <span className="text-slate-400">{veh.description}</span>}
           <select
@@ -210,6 +210,7 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
         rows={rows}
         monthHeaders={monthLabels(cycle.fy_year)}
         labelHeader="Vehicle / cost"
+        labelWidth="17rem"
         readOnly={!canEdit}
         latestActualIdx={latestActualIdx}
         onChange={onChange}
