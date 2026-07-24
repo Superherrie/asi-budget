@@ -29,6 +29,12 @@ const detailTab: Record<string, { path: string; label: string }> = {
   subcontractor: { path: 'subcontractors', label: 'Subcontractors' },
 }
 
+/** Accounts computed by the system — never entered by hand. */
+const AUTO_NOTE: Record<string, string> = {
+  ho_alloc: 'Head Office allocation',
+  rti: 'auto — 3% of total revenue',
+}
+
 const Z12 = Array(12).fill(0) as number[]
 
 export default function StatementTab({ budget }: { budget: BudgetCtx }) {
@@ -167,10 +173,12 @@ export default function StatementTab({ budget }: { budget: BudgetCtx }) {
           kind: 'computed' as const,
         }
       }
-      if (acc.input_type === 'ho_alloc') {
+      // auto-calculated accounts: no manual entry, shown read-only with a note
+      const autoNote = AUTO_NOTE[acc.input_type]
+      if (autoNote) {
         return {
           ...base,
-          label: <span>{acc.name} <span className="text-slate-400">(Head Office allocation)</span></span>,
+          label: <span>{acc.name} <span className="text-slate-400">({autoNote})</span></span>,
           display: line.months,
           readOnly: true,
           kind: 'computed' as const,
