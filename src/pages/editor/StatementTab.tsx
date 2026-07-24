@@ -129,6 +129,16 @@ export default function StatementTab({ budget }: { budget: BudgetCtx }) {
     }
     if (line.kind === 'account' && line.account) {
       const acc = line.account
+      if (!acc.budgetable) {
+        // shown with its history, but no budget may be captured against it
+        return {
+          ...base,
+          label: <span>{acc.name} <span className="text-slate-400">(not budgeted)</span></span>,
+          display: line.months,
+          readOnly: true,
+          kind: 'computed' as const,
+        }
+      }
       if (acc.input_type === 'direct') {
         const add = detailAdd.get(acc.id)
         const hasDetail = !!add && add.some((v) => Math.abs(v) > 0.005)

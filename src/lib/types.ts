@@ -59,6 +59,8 @@ export interface Account {
   section: AccountSection
   sort_order: number
   input_type: InputType
+  /** false = shown on the statement (with history) but cannot be budgeted. */
+  budgetable: boolean
 }
 
 export interface BudgetLine extends Partial<MonthValues> {
