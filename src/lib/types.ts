@@ -150,7 +150,7 @@ export interface SubcontractorLine extends Partial<MonthValues> {
   cycle_id: number
   cost_centre_id: number
   name: string
-  kind: 'electrical' | 'data'
+  kind: 'electrical' | 'data' | 'civils'
 }
 
 export type ApprovalStatus = 'draft' | 'submitted' | 'approved' | 'rejected'

@@ -8,13 +8,14 @@ import type { SubcontractorLine } from '../../lib/types'
 interface SubLine {
   id: number
   name: string
-  kind: 'electrical' | 'data'
+  kind: 'electrical' | 'data' | 'civils'
   months: number[]
 }
 
 const KINDS: { kind: SubLine['kind']; label: string; account: string }[] = [
   { kind: 'electrical', label: 'Electrical → Cost of Subcontractors (Elec Only)', account: '200310' },
   { kind: 'data', label: 'Data → Cost of Subcontractors', account: '200300' },
+  { kind: 'civils', label: 'Civils → Cost of Civils', account: '200400' },
 ]
 
 export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
@@ -119,8 +120,8 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
   return (
     <div>
       <p className="mb-2 text-sm text-slate-500">
-        Budget per subcontractor — enter positive amounts. <b>Electrical</b> subcontractors post to Cost of
-        Subcontractors (Elec Only); <b>Data</b> subcontractors post to Cost of Subcontractors.
+        Budget per subcontractor — enter positive amounts. <b>Electrical</b> posts to Cost of Subcontractors
+        (Elec Only), <b>Data</b> to Cost of Subcontractors, and <b>Civils</b> to Cost of Civils.
       </p>
       {err && <p className="mb-2 text-sm text-red-600">{err}</p>}
       {canEdit && (
@@ -134,6 +135,7 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
             <select value={fKind} onChange={(e) => setFKind(e.target.value as SubLine['kind'])} className="rounded border border-slate-300 px-2 py-1 text-sm">
               <option value="electrical">Electrical</option>
               <option value="data">Data</option>
+              <option value="civils">Civils</option>
             </select>
           </div>
           <button onClick={() => void addLine()} className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
