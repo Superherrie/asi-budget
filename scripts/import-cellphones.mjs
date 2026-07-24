@@ -40,10 +40,13 @@ async function main() {
   const MONTHS = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' }
   const period = `20${mon.slice(-2)}-${MONTHS[mon.slice(0, 3)]}-01`
 
-  const data = rows.slice(4).filter((r) => r[0]).map((r) => ({
+  const all = rows.slice(4).filter((r) => r[0]).map((r) => ({
     cell: String(r[0]).trim(), package: String(r[1] ?? '').trim(), name: String(r[2] ?? '').trim(),
     gl: String(r[4] ?? '').trim(), branch: String(r[5] ?? '').toUpperCase().trim(), amount: Number(r[col]) || 0,
   }))
+  // lines with no charge for the month carry no information — skip them
+  const data = all.filter((d) => d.amount !== 0)
+  const skippedZero = all.length - data.length
 
   // ---- match to employees ------------------------------------------------
   const { createClient } = await import('@supabase/supabase-js')
@@ -101,7 +104,7 @@ async function main() {
     })
   }
 
-  console.log(`${data.length} cellphones from ${file}`)
+  console.log(`${data.length} cellphones from ${file}${skippedZero ? ` (${skippedZero} zero-total lines skipped)` : ''}`)
   console.log(`  period ${period} (${monthLabel}), total R${data.reduce((s, d) => s + d.amount, 0).toFixed(2)}`)
   console.log(`  matched to an employee : ${matched}  R${matchedVal.toFixed(2)}`)
   console.log(`  parked in ZZZ          : ${parked}  R${parkedVal.toFixed(2)}`)
