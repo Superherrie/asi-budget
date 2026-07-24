@@ -41,7 +41,6 @@ from (values
   ('SBV Services (Pty) Ltd'),
   ('Honeywell Automation Control Sol. Sa (Pty) Ltd - Hps'),
   ('Philco Systems (Pty) Ltd'),
-  ('Sishen Iron Ore Comp.(Pty) Ltd -  X66952'),
   ('University Of Johannesburg'),
   ('Yantek Industries (Pty) Ltd'),
   ('IC Logistix (Pty) Ltd'),
