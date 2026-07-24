@@ -27,3 +27,6 @@ scripts/.env
 
 # Supabase CLI local temp
 supabase/.temp/
+
+# Completed import workbooks may contain passwords - never commit (repo is public)
+/*.xlsx
