@@ -3,7 +3,7 @@ import MonthGrid, { type CellUpdate, type GridRow } from '../../components/Month
 import { monthLabels } from '../../lib/months'
 import { supabase } from '../../lib/supabase'
 import { monthsOf, monthCols, type BudgetCtx } from '../../hooks/useBudget'
-import { parseAmount } from '../../lib/format'
+import { fmt, parseAmount } from '../../lib/format'
 import type { Employee, Team } from '../../lib/types'
 
 interface EmpLine {
@@ -25,6 +25,10 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   const [teams, setTeams] = useState<Team[]>([])
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  // imported cellphone billing — a reference only, never part of the budget
+  const [cellBill, setCellBill] = useState<Map<number, number>>(new Map())
+  const [unbilled, setUnbilled] = useState<{ cell_no: string; billed_name: string; amount: number }[]>([])
+  const [billPeriod, setBillPeriod] = useState<string | null>(null)
   // add-employee form
   const [fName, setFName] = useState('')
   const [fTitle, setFTitle] = useState('')
@@ -62,6 +66,23 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     const { data: t } = await supabase
       .from('budget_teams').select('*').eq('cost_centre_id', cc.id).eq('active', true).order('name')
     setTeams((t as Team[]) ?? [])
+
+    // latest imported cellphone billing for this cost centre
+    const { data: bill } = await supabase
+      .from('budget_cellphones').select('employee_id, cell_no, billed_name, amount, period')
+      .eq('cost_centre_id', cc.id).order('period', { ascending: false })
+    const rowsBill = (bill ?? []) as Record<string, unknown>[]
+    const latest = rowsBill.length ? (rowsBill[0].period as string) : null
+    setBillPeriod(latest)
+    const byEmp = new Map<number, number>()
+    const loose: { cell_no: string; billed_name: string; amount: number }[] = []
+    for (const r of rowsBill.filter((r) => r.period === latest)) {
+      const amt = Number(r.amount) || 0
+      if (r.employee_id) byEmp.set(r.employee_id as number, (byEmp.get(r.employee_id as number) ?? 0) + amt)
+      else loose.push({ cell_no: r.cell_no as string, billed_name: r.billed_name as string, amount: amt })
+    }
+    setCellBill(byEmp)
+    setUnbilled(loose.sort((a, b) => b.amount - a.amount))
     setLoaded(true)
   }
 
@@ -213,6 +234,10 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   const cellAccountForCategory = (cat: string) =>
     cellAccounts.find((a) => catSuffix(a.name) === cat)?.id ?? cellAccounts[0]?.id
   const cellAccountFor = (emp: Employee) => cellAccountForCategory(categoryOf(emp))
+  // "2026-06-01" -> "Jun 26"
+  const billLabel = billPeriod
+    ? `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(billPeriod.slice(5, 7)) - 1]} ${billPeriod.slice(2, 4)}`
+    : ''
   const CATEGORY_ORDER = ['Ops Cabling', 'Sales', 'Admin', 'Ops Admin', 'Exec']
   const salaryGroups = (() => {
     const g = new Map<string, Employee[]>()
@@ -230,6 +255,15 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     const opts = kind === 'salary' ? salaryAccounts : cellAccounts
     const rows: GridRow[] = []
     const totals = Array(12).fill(0) as number[]
+    // billed cellphone cost shown as a cost, like the other actuals columns
+    let billTotal = 0
+    const billed = (emp: Employee) => {
+      if (kind !== 'cellphone') return undefined
+      const v = cellBill.get(emp.id!)
+      if (!v) return [null]
+      billTotal += v
+      return [-v]
+    }
     for (const emp of emps) {
       const line = lines.find((l) => l.employee_id === emp.id && l.kind === kind)
       if (!line) {
@@ -244,7 +278,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
                 </button>
               </span>
             ),
-            display: null, readOnly: true, kind: 'input',
+            display: null, readOnly: true, kind: 'input', context: billed(emp),
           })
         }
         continue
@@ -284,9 +318,13 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
         ),
         values: line.months,
         costRow: true,
+        context: billed(emp),
       })
     }
-    rows.push({ key: `tot_${kind}`, label: totalLabel, display: totals, kind: 'subtotal', readOnly: true })
+    rows.push({
+      key: `tot_${kind}`, label: totalLabel, display: totals, kind: 'subtotal', readOnly: true,
+      context: kind === 'cellphone' ? [billTotal ? -billTotal : null] : undefined,
+    })
     return rows
   }
 
@@ -350,15 +388,43 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
       </div>
       <div>
         <h3 className="mb-1 text-sm font-semibold text-sky-950">Cell Phones</h3>
+        {billPeriod && (
+          <p className="mb-1 text-xs text-slate-500">
+            The <b>{billLabel}</b> column is the actual Vodacom cost (excl. VAT) for that month, matched to each
+            employee — for reference while budgeting.
+          </p>
+        )}
         <MonthGrid
           rows={gridFor('cellphone')}
           monthHeaders={monthLabels(cycle.fy_year)}
+          contextHeaders={billPeriod ? [billLabel] : []}
           labelHeader="Employee"
           labelWidth="17rem"
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
           onChange={onChange}
         />
+        {unbilled.length > 0 && (
+          <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3">
+            <p className="mb-1 text-xs font-semibold text-slate-600">
+              Cellphones not matched to an employee · {unbilled.length} ·{' '}
+              {fmt(unbilled.reduce((s, u) => s + u.amount, 0))}
+            </p>
+            <div className="max-h-52 overflow-auto">
+              <table className="w-full text-xs">
+                <tbody>
+                  {unbilled.map((u) => (
+                    <tr key={u.cell_no} className="border-b border-slate-100">
+                      <td className="py-0.5 pr-2 text-slate-400">{u.cell_no}</td>
+                      <td className="py-0.5 pr-2">{u.billed_name}</td>
+                      <td className="num-cell py-0.5">{fmt(u.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
