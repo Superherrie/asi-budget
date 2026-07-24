@@ -17,9 +17,10 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-sky-950 text-white">
+      <header className="bg-brand-navy text-white">
         <div className="mx-auto flex max-w-screen-2xl items-center gap-4 px-4 py-2">
-          <span className="text-lg font-semibold tracking-tight">ASI Connect Budget</span>
+          <img src="brand/logo_white.png" alt="ASI Connect" className="h-7" />
+          <span className="font-display text-sm font-semibold tracking-tight text-white/70">Budget</span>
           <nav className="flex gap-1">
             <NavLink to="/" end className={linkClass}>
               My Cost Centres
@@ -48,6 +49,7 @@ export default function Layout() {
             </button>
           </div>
         </div>
+        <div className="brand-rule" />
       </header>
       <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-4">
         {/* password was set for them — nothing else is reachable until it's changed */}
