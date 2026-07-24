@@ -22,7 +22,7 @@ interface CustLine {
 const Z = () => Array(12).fill(0) as number[]
 
 export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
-  const { cycle, cc, accounts, canEdit, actuals, latestActualIdx } = budget
+  const { cycle, cc, accounts, canEdit, latestActualIdx } = budget
   const salesAccount = accounts.find((a) => a.input_type === 'revenue')
   const materialAccount = accounts.find((a) => a.input_type === 'material_pct')
   const [teams, setTeams] = useState<Team[]>([])
@@ -210,11 +210,6 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
   const other = teamTotals.map((v, i) => v - allocated[i])
   const overAllocated = other.some((v) => v < -0.005)
 
-  const histContext = [
-    (actuals.get(2025)?.get(salesAccount.id) ?? []).reduce((s, v) => s + v, 0) || null,
-    (actuals.get(2026)?.get(salesAccount.id) ?? []).reduce((s, v) => s + v, 0) || null,
-  ]
-
   // ---- table 1: by team ---------------------------------------------------
   const teamRows: GridRow[] = [
     ...sortedTeams.map((l) => ({
@@ -235,7 +230,6 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
       display: teamTotals,
       kind: 'subtotal' as const,
       readOnly: true,
-      context: histContext,
     },
   ]
 
@@ -340,7 +334,6 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
         <MonthGrid
           rows={teamRows}
           monthHeaders={monthLabels(cycle.fy_year)}
-          contextHeaders={['FY25 Act', 'FY26 Act']}
           labelHeader="Team"
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
