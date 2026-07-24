@@ -6,6 +6,7 @@ alter table budget_accounts
 
 update budget_accounts set budgetable = false where code in (
   '200100',  -- Cost of Material Provision
+  '200110',  -- Cost of Subcontractors Provision
   '230500',  -- Stock Adjustments
   '231000',  -- Stock Revaluation
   '232500',  -- Purchase Price Variance
