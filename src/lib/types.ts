@@ -50,7 +50,7 @@ export type AccountSection =
   | 'exceptional'
   | 'finance'
 
-export type InputType = 'direct' | 'revenue' | 'salary' | 'cellphone' | 'vehicle' | 'material_pct' | 'training' | 'ho_alloc' | 'subcontractor' | 'rti'
+export type InputType = 'direct' | 'revenue' | 'salary' | 'cellphone' | 'vehicle' | 'material_pct' | 'training' | 'ho_alloc' | 'subcontractor' | 'rti' | 'internal_sales'
 
 export interface Account {
   id: number

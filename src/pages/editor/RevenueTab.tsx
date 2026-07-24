@@ -343,6 +343,10 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
 
       <div>
         <h3 className="mb-1 text-sm font-semibold text-sky-950">2 · Allocate to customers</h3>
+        <p className="mb-1 text-xs text-slate-500">
+          Revenue allocated to <b>Capitec</b> or <b>Old Mutual</b> automatically raises a 5% internal charge on
+          <i> Internal Sales - Capitec</i> — charged to this branch and allocated to CAP.
+        </p>
         {overAllocated && (
           <p className="mb-1 text-xs text-red-600">
             Allocated to customers exceeds the team total in at least one month — “Other” has gone negative.
