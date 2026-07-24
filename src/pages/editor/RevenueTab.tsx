@@ -45,7 +45,9 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
     if (!cycle || !cc || !salesAccount) return
     const [t, c, tl, cl] = await Promise.all([
       supabase.from('budget_teams').select('*').eq('cost_centre_id', cc.id).eq('active', true).order('name'),
-      supabase.from('budget_customers').select('*').eq('cost_centre_id', cc.id).eq('active', true).order('name'),
+      // shared (cost_centre_id null) + this branch's own customers
+      supabase.from('budget_customers').select('*')
+        .or(`cost_centre_id.is.null,cost_centre_id.eq.${cc.id}`).eq('active', true).order('name'),
       supabase.from('budget_revenue_lines').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id),
       supabase.from('budget_revenue_customer_lines').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id),
     ])
