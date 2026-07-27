@@ -144,6 +144,27 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
     await reload()
   }
 
+  async function fillFromBase(veh: Vehicle) {
+    const b = base.get(veh.id!)
+    if (!b) return
+    const vehLines = lines.filter((l) => l.vehicle_id === veh.id)
+    const updates: { id: number; months: number[] }[] = []
+    for (const l of vehLines) {
+      const amt = b.get(costTypeOf(accById.get(l.account_id)?.name ?? ''))
+      if (amt == null) continue
+      updates.push({ id: l.id, months: Array(12).fill(-Math.round(amt * 100) / 100) })
+    }
+    if (!updates.length) return
+    const hasData = vehLines.some((l) => l.months.some((v) => v !== 0))
+    if (hasData && !window.confirm(`Replace ${veh.registration}'s budget with the base monthly cost across all 12 months?`)) return
+    setErr(null)
+    for (const u of updates) {
+      const { error } = await supabase.from('budget_vehicle_lines').update(monthCols(u.months)).eq('id', u.id)
+      if (error) { setErr(error.message); return }
+    }
+    setLines((prev) => prev.map((l) => { const u = updates.find((x) => x.id === l.id); return u ? { ...l, months: u.months } : l }))
+  }
+
   async function retireVehicle(veh: Vehicle) {
     if (!window.confirm(`Mark ${veh.registration} as inactive? Its budget lines stop counting.`)) return
     const { error } = await supabase.from('budget_vehicles').update({ active: false }).eq('id', veh.id!)
@@ -172,6 +193,12 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
           >
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+          {canEdit && base.get(veh.id!) && (
+            <button onClick={() => void fillFromBase(veh)} title="Set all 12 months to the base monthly cost"
+              className="rounded border border-sky-300 px-1.5 text-[11px] text-sky-700 hover:bg-sky-50">
+              fill from base
+            </button>
+          )}
           {canEdit && (
             <button onClick={() => void retireVehicle(veh)} className="rounded border border-slate-300 px-1.5 text-[11px] text-slate-500 hover:bg-red-50">
               retire
