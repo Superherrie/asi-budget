@@ -23,6 +23,8 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
   const salesAccount = accounts.find((a) => a.input_type === 'revenue')
   const [subs, setSubs] = useState<Subcontractor[]>([])
   const [lines, setLines] = useState<CostLine[]>([])
+  // revenue budgeted per subcontractor on the Revenue tab (read-only here)
+  const [revBySub, setRevBySub] = useState<Map<number, number[]>>(new Map())
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [fName, setFName] = useState('')
@@ -32,9 +34,10 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
 
   async function reload() {
     if (!cycle || !cc) return
-    const [s, l] = await Promise.all([
+    const [s, l, rev] = await Promise.all([
       supabase.from('budget_subcontractors').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id).eq('active', true).order('name'),
       supabase.from('budget_subcontractor_lines').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id),
+      supabase.from('budget_revenue_lines').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id).not('subcontractor_id', 'is', null),
     ])
     setSubs((s.data as Subcontractor[]) ?? [])
     setLines(((l.data ?? []) as Record<string, unknown>[]).map((r) => ({
@@ -42,6 +45,9 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
       subcontractor_id: r.subcontractor_id as number,
       months: monthsOf(r),
     })))
+    const rm = new Map<number, number[]>()
+    for (const r of (rev.data ?? []) as Record<string, unknown>[]) rm.set(r.subcontractor_id as number, monthsOf(r))
+    setRevBySub(rm)
     setLoaded(true)
   }
 
@@ -95,6 +101,24 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
     const e = await removeSubcontractor(subId)
     if (e) setErr(e)
     else await reload()
+  }
+
+  // read-only revenue table (budgeted on the Revenue tab)
+  const revRows: GridRow[] = []
+  let anyRev = false
+  for (const { kind } of KINDS) {
+    const kindSubs = subs.filter((s) => s.kind === kind).sort((a, b) => a.name.localeCompare(b.name))
+    const kindWithRev = kindSubs.filter((s) => (revBySub.get(s.id!) ?? []).some((v) => v !== 0))
+    if (!kindWithRev.length) continue
+    anyRev = true
+    revRows.push({ key: `rh_${kind}`, label: KINDS.find((k) => k.kind === kind)!.label.split(' → ')[0], kind: 'section' })
+    const totals = Array(12).fill(0) as number[]
+    for (const s of kindWithRev) {
+      const m = revBySub.get(s.id!) ?? Array(12).fill(0)
+      m.forEach((v, i) => (totals[i] += v))
+      revRows.push({ key: `rs${s.id}`, label: <span className="text-slate-600">{s.name}</span>, display: m, readOnly: true, indent: 1 })
+    }
+    revRows.push({ key: `rt_${kind}`, label: `Total ${kind} revenue`, display: totals, kind: 'subtotal', readOnly: true, indent: 1 })
   }
 
   const lineBySub = new Map(lines.map((l) => [l.subcontractor_id, l]))
@@ -153,6 +177,20 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
           </button>
         </div>
       )}
+      {anyRev && (
+        <div className="mb-5">
+          <h3 className="mb-1 text-sm font-semibold text-sky-950">Revenue budgeted per subcontractor</h3>
+          <p className="mb-1 text-xs text-slate-500">From the Revenue tab — read-only here, for comparison with the cost below.</p>
+          <MonthGrid
+            rows={revRows}
+            monthHeaders={monthLabels(cycle.fy_year)}
+            labelHeader="Subcontractor"
+            readOnly
+          />
+        </div>
+      )}
+
+      <h3 className="mb-1 text-sm font-semibold text-sky-950">Cost per subcontractor</h3>
       <MonthGrid
         rows={rows}
         monthHeaders={monthLabels(cycle.fy_year)}
