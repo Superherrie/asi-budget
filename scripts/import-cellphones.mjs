@@ -90,14 +90,20 @@ async function main() {
     return [null, '']
   }
 
+  // tablets / printers / office data etc. — not a person, but they belong to a branch
+  const isDevice = (d) => d.gl === '404600' ||
+    /TABLET|PRINTER|OFFICE|BROADBAND|ROUTER|MODEM|SPARE|REPLAC|FIBRE|VUMA|BACK-?UP/i.test(d.name)
+
   const out = [], fuzzy = []
-  let matched = 0, matchedVal = 0, parked = 0, parkedVal = 0
+  let matched = 0, matchedVal = 0, devices = 0, deviceVal = 0, parked = 0, parkedVal = 0
   for (const d of data) {
     const [e, tier] = match(d)
-    if (e) { matched++; matchedVal += d.amount; if (tier !== 'exact') fuzzy.push(`${d.name}  ->  ${e.name}  (${tier})`) }
-    else { parked++; parkedVal += d.amount }
+    let dest
+    if (e) { dest = e.cost_centre_id; matched++; matchedVal += d.amount; if (tier !== 'exact') fuzzy.push(`${d.name}  ->  ${e.name}  (${tier})`) }
+    else if (isDevice(d) && d.branch !== 'ZZZ' && ccMap.has(d.branch)) { dest = ccMap.get(d.branch); devices++; deviceVal += d.amount }
+    else { dest = zzz; parked++; parkedVal += d.amount }
     out.push({
-      cost_centre_id: e ? e.cost_centre_id : zzz,
+      cost_centre_id: dest,
       employee_id: e ? e.id : null,
       cell_no: d.cell, package: d.package, billed_name: d.name, gl_code: d.gl,
       period, amount: Math.round(d.amount * 100) / 100,
@@ -107,7 +113,8 @@ async function main() {
   console.log(`${data.length} cellphones from ${file}${skippedZero ? ` (${skippedZero} zero-total lines skipped)` : ''}`)
   console.log(`  period ${period} (${monthLabel}), total R${data.reduce((s, d) => s + d.amount, 0).toFixed(2)}`)
   console.log(`  matched to an employee : ${matched}  R${matchedVal.toFixed(2)}`)
-  console.log(`  parked in ZZZ          : ${parked}  R${parkedVal.toFixed(2)}`)
+  console.log(`  devices → their branch : ${devices}  R${deviceVal.toFixed(2)}`)
+  console.log(`  unmatched → ZZZ        : ${parked}  R${parkedVal.toFixed(2)}`)
   if (fuzzy.length) { console.log(`\n  ${fuzzy.length} fuzzy matches:`); fuzzy.forEach((f) => console.log('    ' + f)) }
   if (!apply) { console.log('\nDry run only. Re-run with --apply to import.'); return }
 

@@ -27,6 +27,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   const [err, setErr] = useState<string | null>(null)
   // imported cellphone billing — a reference only, never part of the budget
   const [cellBill, setCellBill] = useState<Map<number, number>>(new Map())
+  const [cellNo, setCellNo] = useState<Map<number, string[]>>(new Map())
   const [unbilled, setUnbilled] = useState<{ cell_no: string; billed_name: string; amount: number }[]>([])
   const [billPeriod, setBillPeriod] = useState<string | null>(null)
   // add-employee form
@@ -75,13 +76,18 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     const latest = rowsBill.length ? (rowsBill[0].period as string) : null
     setBillPeriod(latest)
     const byEmp = new Map<number, number>()
+    const nums = new Map<number, string[]>()
     const loose: { cell_no: string; billed_name: string; amount: number }[] = []
     for (const r of rowsBill.filter((r) => r.period === latest)) {
       const amt = Number(r.amount) || 0
-      if (r.employee_id) byEmp.set(r.employee_id as number, (byEmp.get(r.employee_id as number) ?? 0) + amt)
-      else loose.push({ cell_no: r.cell_no as string, billed_name: r.billed_name as string, amount: amt })
+      if (r.employee_id) {
+        const id = r.employee_id as number
+        byEmp.set(id, (byEmp.get(id) ?? 0) + amt)
+        ;(nums.get(id) ?? nums.set(id, []).get(id)!).push(r.cell_no as string)
+      } else loose.push({ cell_no: r.cell_no as string, billed_name: r.billed_name as string, amount: amt })
     }
     setCellBill(byEmp)
+    setCellNo(nums)
     setUnbilled(loose.sort((a, b) => b.amount - a.amount))
     setLoaded(true)
   }
@@ -264,6 +270,10 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
       billTotal += v
       return [-v]
     }
+    const phoneTag = (emp: Employee) =>
+      kind === 'cellphone' && cellNo.get(emp.id!)?.length
+        ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-500">{cellNo.get(emp.id!)!.join(', ')}</span>
+        : null
     for (const emp of emps) {
       const line = lines.find((l) => l.employee_id === emp.id && l.kind === kind)
       if (!line) {
@@ -273,6 +283,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
             label: (
               <span className="inline-flex items-center gap-2 text-slate-400">
                 {emp.name}
+                {phoneTag(emp)}
                 <button onClick={() => void addCellLine(emp)} className="rounded border border-slate-300 px-1.5 text-[11px] hover:bg-sky-50">
                   + add cell phone
                 </button>
@@ -301,6 +312,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
                 {accById.get(line.account_id)?.name ?? '—'}
               </span>
             )}
+            {phoneTag(emp)}
             {kind === 'salary' && (
               <select
                 value={memberships.get(emp.id!) ?? ''}
