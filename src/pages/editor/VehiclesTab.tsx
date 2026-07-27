@@ -33,6 +33,8 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [lines, setLines] = useState<VehLine[]>([])
+  // base running cost per vehicle per cost type (a budgeting reference)
+  const [base, setBase] = useState<Map<number, Map<string, number>>>(new Map())
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [fReg, setFReg] = useState('')
@@ -59,6 +61,15 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
         months: monthsOf(r),
       })))
     } else setLines([])
+    if (ids.length) {
+      const { data: b } = await supabase.from('budget_vehicle_base').select('vehicle_id, cost_type, amount').in('vehicle_id', ids)
+      const m = new Map<number, Map<string, number>>()
+      for (const r of (b ?? []) as Record<string, unknown>[]) {
+        const vid = r.vehicle_id as number
+        ;(m.get(vid) ?? m.set(vid, new Map()).get(vid)!).set(r.cost_type as string, Number(r.amount) || 0)
+      }
+      setBase(m)
+    } else setBase(new Map())
     setLoaded(true)
   }
 
@@ -169,15 +180,19 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
         </span>
       ),
       kind: 'section',
+      context: [(() => { const t = base.get(veh.id!); if (!t) return null; const s = [...t.values()].reduce((a, v) => a + v, 0); return s ? -s : null })()],
     })
     for (const l of vehLines) {
       l.months.forEach((v, i) => (totals[i] += v))
+      const costType = costTypeOf(accById.get(l.account_id)?.name ?? '')
+      const b = base.get(veh.id!)?.get(costType)
       rows.push({
         key: `v${l.id}`,
-        label: <span className="text-slate-600">{costTypeOf(accById.get(l.account_id)?.name ?? '')}</span>,
+        label: <span className="text-slate-600">{costType}</span>,
         values: l.months,
         indent: 1,
         costRow: true,
+        context: [b ? -b : null],
       })
     }
   }
@@ -187,7 +202,8 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
     <div>
       <p className="mb-2 text-sm text-slate-500">
         Each vehicle has its running-cost GL lines (fuel, maintenance, lease, tolls, surveillance) ready to budget —
-        enter positive amounts. Set a vehicle’s <b>category</b> to post its costs to the matching M/V accounts.
+        enter positive amounts. Set a vehicle’s <b>category</b> to post its costs to the matching M/V accounts. The
+        <b> Base /mo</b> column is the average monthly running cost from the fleet report, as a budgeting guide.
       </p>
       {err && <p className="mb-2 text-sm text-red-600">{err}</p>}
       {canEdit && (
@@ -209,6 +225,7 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
       <MonthGrid
         rows={rows}
         monthHeaders={monthLabels(cycle.fy_year)}
+        contextHeaders={['Base /mo']}
         labelHeader="Vehicle / cost"
         labelWidth="17rem"
         readOnly={!canEdit}
