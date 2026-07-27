@@ -206,6 +206,16 @@ export default function StatementTab({ budget }: { budget: BudgetCtx }) {
 
   return (
     <div>
+      {canEdit && (
+        <p className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-3 w-4 rounded-sm border border-amber-200 bg-amber-50" /> you can budget these
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-3 w-4 rounded-sm border border-slate-200 bg-slate-50" /> greyed lines are calculated or come from another tab (Revenue, Salaries, Vehicles…)
+          </span>
+        </p>
+      )}
       <MonthGrid
         rows={rows}
         monthHeaders={monthLabels(cycle.fy_year)}

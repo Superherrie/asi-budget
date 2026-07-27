@@ -390,8 +390,8 @@ export default function MonthGrid({
                           <td
                             key={c}
                             className={`num-cell border-l border-slate-100 px-1 py-1 ${
-                              editable ? 'cursor-cell' : 'text-slate-500'
-                            } ${inSel(r, c) && editable ? 'bg-sky-100' : ''} ${
+                              editable ? 'cursor-cell' : 'text-slate-400'
+                            } ${editable && !inSel(r, c) ? 'bg-amber-50 hover:bg-amber-100' : ''} ${inSel(r, c) && editable ? 'bg-sky-100' : ''} ${
                               focused && editable ? 'ring-2 ring-inset ring-sky-500' : ''
                             }`}
                             onMouseDown={(e) => {
