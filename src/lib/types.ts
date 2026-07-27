@@ -155,12 +155,22 @@ export interface RevenueCustomerLine extends Partial<MonthValues> {
   customer_id: number
 }
 
-export interface SubcontractorLine extends Partial<MonthValues> {
+/** A subcontractor: budgeted for revenue on the Revenue tab and cost on the Subcontractors tab. */
+export interface Subcontractor {
   id?: number
   cycle_id: number
   cost_centre_id: number
   name: string
   kind: 'electrical' | 'data' | 'civils'
+  active: boolean
+}
+
+/** The cost line for a subcontractor (revenue lives in budget_revenue_lines). */
+export interface SubcontractorLine extends Partial<MonthValues> {
+  id?: number
+  cycle_id: number
+  cost_centre_id: number
+  subcontractor_id: number
 }
 
 export type ApprovalStatus = 'draft' | 'submitted' | 'approved' | 'rejected'

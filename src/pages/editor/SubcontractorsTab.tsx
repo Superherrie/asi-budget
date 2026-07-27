@@ -3,39 +3,43 @@ import MonthGrid, { type CellUpdate, type GridRow } from '../../components/Month
 import { monthLabels } from '../../lib/months'
 import { supabase } from '../../lib/supabase'
 import { monthsOf, monthCols, type BudgetCtx } from '../../hooks/useBudget'
-import type { SubcontractorLine } from '../../lib/types'
+import { createSubcontractor, removeSubcontractor } from '../../lib/subcontractors'
+import type { Subcontractor } from '../../lib/types'
 
-interface SubLine {
+interface CostLine {
   id: number
-  name: string
-  kind: 'electrical' | 'data' | 'civils'
+  subcontractor_id: number
   months: number[]
 }
 
-const KINDS: { kind: SubLine['kind']; label: string; account: string }[] = [
-  { kind: 'electrical', label: 'Electrical → Cost of Subcontractors (Elec Only)', account: '200310' },
-  { kind: 'data', label: 'Data → Cost of Subcontractors', account: '200300' },
-  { kind: 'civils', label: 'Civils → Cost of Civils', account: '200400' },
+const KINDS: { kind: Subcontractor['kind']; label: string }[] = [
+  { kind: 'electrical', label: 'Electrical → Cost of Subcontractors (Elec Only)' },
+  { kind: 'data', label: 'Data → Cost of Subcontractors' },
+  { kind: 'civils', label: 'Civils → Cost of Civils' },
 ]
 
 export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
-  const { cycle, cc, canEdit, latestActualIdx } = budget
-  const [lines, setLines] = useState<SubLine[]>([])
+  const { cycle, cc, accounts, canEdit, latestActualIdx } = budget
+  const salesAccount = accounts.find((a) => a.input_type === 'revenue')
+  const [subs, setSubs] = useState<Subcontractor[]>([])
+  const [lines, setLines] = useState<CostLine[]>([])
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [fName, setFName] = useState('')
-  const [fKind, setFKind] = useState<SubLine['kind']>('electrical')
+  const [fKind, setFKind] = useState<Subcontractor['kind']>('electrical')
   const pending = useRef(new Map<number, number[]>())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function reload() {
     if (!cycle || !cc) return
-    const { data } = await supabase.from('budget_subcontractor_lines').select('*')
-      .eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id)
-    setLines(((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    const [s, l] = await Promise.all([
+      supabase.from('budget_subcontractors').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id).eq('active', true).order('name'),
+      supabase.from('budget_subcontractor_lines').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id),
+    ])
+    setSubs((s.data as Subcontractor[]) ?? [])
+    setLines(((l.data ?? []) as Record<string, unknown>[]).map((r) => ({
       id: r.id as number,
-      name: (r.name as string) ?? '',
-      kind: r.kind as SubLine['kind'],
+      subcontractor_id: r.subcontractor_id as number,
       months: monthsOf(r),
     })))
     setLoaded(true)
@@ -74,54 +78,60 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
     saveTimer.current = setTimeout(flush, 600)
   }
 
-  async function addLine() {
+  async function addSub() {
     setErr(null)
     if (!fName.trim()) { setErr('Subcontractor name is required.'); return }
-    const { error } = await supabase.from('budget_subcontractor_lines').insert({
-      cycle_id: cycle!.id, cost_centre_id: cc!.id, name: fName.trim(), kind: fKind,
-    } satisfies Partial<SubcontractorLine>)
-    if (error) setErr(error.message)
+    if (!salesAccount) { setErr('No revenue account configured.'); return }
+    if (subs.some((s) => s.name.toLowerCase() === fName.trim().toLowerCase())) {
+      setErr('A subcontractor with that name already exists.'); return
+    }
+    const e = await createSubcontractor({ cycleId: cycle!.id, ccId: cc!.id, salesAccountId: salesAccount.id, name: fName.trim(), kind: fKind })
+    if (e) setErr(e)
     else { setFName(''); await reload() }
   }
 
-  async function removeLine(id: number) {
-    if (!window.confirm('Remove this subcontractor?')) return
-    const { error } = await supabase.from('budget_subcontractor_lines').delete().eq('id', id)
-    if (error) setErr(error.message)
-    else setLines((prev) => prev.filter((l) => l.id !== id))
+  async function removeSub(subId: number) {
+    if (!window.confirm('Remove this subcontractor? Its revenue and cost lines are deleted.')) return
+    const e = await removeSubcontractor(subId)
+    if (e) setErr(e)
+    else await reload()
   }
 
+  const lineBySub = new Map(lines.map((l) => [l.subcontractor_id, l]))
   const rows: GridRow[] = []
   for (const { kind, label } of KINDS) {
     rows.push({ key: `h_${kind}`, label, kind: 'section' })
-    const kindLines = lines.filter((l) => l.kind === kind).sort((a, b) => a.name.localeCompare(b.name))
+    const kindSubs = subs.filter((s) => s.kind === kind).sort((a, b) => a.name.localeCompare(b.name))
     const totals = Array(12).fill(0) as number[]
-    for (const l of kindLines) {
-      l.months.forEach((v, i) => (totals[i] += v))
+    for (const s of kindSubs) {
+      const line = lineBySub.get(s.id!)
+      if (!line) continue
+      line.months.forEach((v, i) => (totals[i] += v))
       rows.push({
-        key: `s${l.id}`,
+        key: `s${line.id}`,
         label: (
           <span className="inline-flex items-center gap-2">
             {canEdit && (
-              <button onClick={() => void removeLine(l.id)} title="Remove" className="text-red-400 hover:text-red-600">✕</button>
+              <button onClick={() => void removeSub(s.id!)} title="Remove" className="text-red-400 hover:text-red-600">✕</button>
             )}
-            <span>{l.name}</span>
+            <span>{s.name}</span>
           </span>
         ),
-        values: l.months,
+        values: line.months,
         indent: 1,
         costRow: true,
       })
     }
-    if (!kindLines.length) rows.push({ key: `none_${kind}`, label: <span className="text-slate-400">No {kind} subcontractors yet</span>, display: null, readOnly: true, indent: 1 })
+    if (!kindSubs.length) rows.push({ key: `none_${kind}`, label: <span className="text-slate-400">No {kind} subcontractors yet</span>, display: null, readOnly: true, indent: 1 })
     rows.push({ key: `t_${kind}`, label: `Total ${kind}`, display: totals, kind: 'subtotal', readOnly: true, indent: 1 })
   }
 
   return (
     <div>
       <p className="mb-2 text-sm text-slate-500">
-        Budget per subcontractor — enter positive amounts. <b>Electrical</b> posts to Cost of Subcontractors
-        (Elec Only), <b>Data</b> to Cost of Subcontractors, and <b>Civils</b> to Cost of Civils.
+        Budget each subcontractor’s <b>cost</b> — enter positive amounts. <b>Electrical</b> posts to Cost of
+        Subcontractors (Elec Only), <b>Data</b> to Cost of Subcontractors, and <b>Civils</b> to Cost of Civils.
+        Subcontractors are shared with the Revenue tab, where their <b>revenue</b> is budgeted.
       </p>
       {err && <p className="mb-2 text-sm text-red-600">{err}</p>}
       {canEdit && (
@@ -132,13 +142,13 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500">Type</label>
-            <select value={fKind} onChange={(e) => setFKind(e.target.value as SubLine['kind'])} className="rounded border border-slate-300 px-2 py-1 text-sm">
+            <select value={fKind} onChange={(e) => setFKind(e.target.value as Subcontractor['kind'])} className="rounded border border-slate-300 px-2 py-1 text-sm">
               <option value="electrical">Electrical</option>
               <option value="data">Data</option>
               <option value="civils">Civils</option>
             </select>
           </div>
-          <button onClick={() => void addLine()} className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
+          <button onClick={() => void addSub()} className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
             Add subcontractor
           </button>
         </div>

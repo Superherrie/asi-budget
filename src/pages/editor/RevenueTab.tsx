@@ -4,7 +4,8 @@ import { monthLabels } from '../../lib/months'
 import { fmt } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { monthsOf, monthCols, type BudgetCtx } from '../../hooks/useBudget'
-import type { Customer, Team } from '../../lib/types'
+import { createSubcontractor, removeSubcontractor, setSubcontractorKind } from '../../lib/subcontractors'
+import type { Customer, Subcontractor, Team } from '../../lib/types'
 
 interface TeamLine {
   id: number
@@ -19,6 +20,15 @@ interface CustLine {
   months: number[]
 }
 
+interface SubRevLine {
+  id: number
+  subcontractor_id: number
+  months: number[]
+}
+
+const SUB_KIND = ['electrical', 'data', 'civils'] as const
+const SUB_KIND_LABEL: Record<string, string> = { electrical: 'Electrical', data: 'Data', civils: 'Civils' }
+
 const Z = () => Array(12).fill(0) as number[]
 
 export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
@@ -29,35 +39,49 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [teamLines, setTeamLines] = useState<TeamLine[]>([])
   const [custLines, setCustLines] = useState<CustLine[]>([])
+  const [subs, setSubs] = useState<Subcontractor[]>([])
+  const [subLines, setSubLines] = useState<SubRevLine[]>([])
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [newTeam, setNewTeam] = useState('')
   const [newCustomer, setNewCustomer] = useState('')
   const [addTeamId, setAddTeamId] = useState('')
   const [addCustomerId, setAddCustomerId] = useState('')
+  const [newSubName, setNewSubName] = useState('')
+  const [newSubKind, setNewSubKind] = useState<Subcontractor['kind']>('electrical')
   const [showManage, setShowManage] = useState(false)
   const pendingTeam = useRef(new Map<number, number[]>())
   const pendingCust = useRef(new Map<number, number[]>())
+  const pendingSub = useRef(new Map<number, number[]>())
   const teamTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const custTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const subTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function reload() {
     if (!cycle || !cc || !salesAccount) return
-    const [t, c, tl, cl] = await Promise.all([
+    const [t, c, tl, cl, sc] = await Promise.all([
       supabase.from('budget_teams').select('*').eq('cost_centre_id', cc.id).eq('active', true).order('name'),
       // shared (cost_centre_id null) + this branch's own customers
       supabase.from('budget_customers').select('*')
         .or(`cost_centre_id.is.null,cost_centre_id.eq.${cc.id}`).eq('active', true).order('name'),
       supabase.from('budget_revenue_lines').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id),
       supabase.from('budget_revenue_customer_lines').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id),
+      supabase.from('budget_subcontractors').select('*').eq('cycle_id', cycle.id).eq('cost_centre_id', cc.id).eq('active', true).order('name'),
     ])
     setTeams((t.data as Team[]) ?? [])
     setCustomers((c.data as Customer[]) ?? [])
-    setTeamLines(((tl.data ?? []) as Record<string, unknown>[]).map((r) => ({
+    setSubs((sc.data as Subcontractor[]) ?? [])
+    const revRows = (tl.data ?? []) as Record<string, unknown>[]
+    setTeamLines(revRows.filter((r) => r.subcontractor_id == null).map((r) => ({
       id: r.id as number,
       team_id: r.team_id as number | null,
       months: monthsOf(r),
       material_pct: Number(r.material_pct) || 0,
+    })))
+    setSubLines(revRows.filter((r) => r.subcontractor_id != null).map((r) => ({
+      id: r.id as number,
+      subcontractor_id: r.subcontractor_id as number,
+      months: monthsOf(r),
     })))
     setCustLines(((cl.data ?? []) as Record<string, unknown>[]).map((r) => ({
       id: r.id as number,
@@ -127,6 +151,55 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
     })
     if (custTimer.current) clearTimeout(custTimer.current)
     custTimer.current = setTimeout(flushCust, 600)
+  }
+
+  function flushSub() {
+    const batch = [...pendingSub.current.entries()]
+    pendingSub.current.clear()
+    for (const [id, months] of batch) {
+      void supabase.from('budget_revenue_lines').update(monthCols(months)).eq('id', id)
+        .then(({ error }) => error && setErr(error.message))
+    }
+  }
+
+  function onChangeSub(updates: CellUpdate[]) {
+    setSubLines((prev) => {
+      const next = prev.map((l) => ({ ...l }))
+      for (const u of updates) {
+        const line = next.find((l) => `s${l.id}` === u.rowKey)
+        if (!line) continue
+        line.months = [...line.months]
+        line.months[u.monthIdx] = u.value
+        pendingSub.current.set(line.id, line.months)
+      }
+      return next
+    })
+    if (subTimer.current) clearTimeout(subTimer.current)
+    subTimer.current = setTimeout(flushSub, 600)
+  }
+
+  async function addSubcontractorLine() {
+    setErr(null)
+    if (!newSubName.trim()) { setErr('Enter a subcontractor name.'); return }
+    if (subs.some((s) => s.name.toLowerCase() === newSubName.trim().toLowerCase())) {
+      setErr('A subcontractor with that name already exists.'); return
+    }
+    const e = await createSubcontractor({ cycleId: cycle!.id, ccId: cc!.id, salesAccountId: salesAccount!.id, name: newSubName.trim(), kind: newSubKind })
+    if (e) setErr(e)
+    else { setNewSubName(''); await reload() }
+  }
+
+  async function removeSub(subId: number) {
+    if (!window.confirm('Remove this subcontractor? Its revenue and cost lines are deleted.')) return
+    const e = await removeSubcontractor(subId)
+    if (e) setErr(e)
+    else await reload()
+  }
+
+  async function changeSubKind(subId: number, kind: Subcontractor['kind']) {
+    setSubs((prev) => prev.map((s) => (s.id === subId ? { ...s, kind } : s)))
+    const e = await setSubcontractorKind(subId, kind)
+    if (e) setErr(e)
   }
 
   function setMatPct(id: number, pct: number) {
@@ -203,11 +276,19 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
   const sortedCusts = [...custLines].sort((a, b) =>
     (customerName.get(a.customer_id) ?? '~').localeCompare(customerName.get(b.customer_id) ?? '~'))
 
+  const subName = new Map(subs.map((s) => [s.id!, s.name]))
+  const subKind = new Map(subs.map((s) => [s.id!, s.kind]))
+  const sortedSubs = [...subLines].sort((a, b) =>
+    (subName.get(a.subcontractor_id) ?? '~').localeCompare(subName.get(b.subcontractor_id) ?? '~'))
+
   const teamTotals = Z()
   for (const l of teamLines) l.months.forEach((v, i) => (teamTotals[i] += v))
+  const subTotals = Z()
+  for (const l of subLines) l.months.forEach((v, i) => (subTotals[i] += v))
+  const grandTotals = teamTotals.map((v, i) => v + subTotals[i])
   const allocated = Z()
   for (const l of custLines) l.months.forEach((v, i) => (allocated[i] += v))
-  const other = teamTotals.map((v, i) => v - allocated[i])
+  const other = grandTotals.map((v, i) => v - allocated[i])
   const overAllocated = other.some((v) => v < -0.005)
 
   // ---- table 1: by team ---------------------------------------------------
@@ -226,8 +307,48 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
     })),
     {
       key: 'team_total',
-      label: `TOTAL revenue → ${salesAccount.name}`,
+      label: 'Total team revenue',
       display: teamTotals,
+      kind: 'subtotal' as const,
+      readOnly: true,
+    },
+  ]
+
+  // ---- table 1b: revenue by subcontractor ---------------------------------
+  const subRows: GridRow[] = [
+    ...sortedSubs.map((l) => ({
+      key: `s${l.id}`,
+      label: (
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {canEdit && (
+            <button onClick={() => void removeSub(l.subcontractor_id)} title="Remove subcontractor" className="text-red-400 hover:text-red-600">✕</button>
+          )}
+          <span className="font-medium">{subName.get(l.subcontractor_id) ?? 'Unknown'}</span>
+          <select
+            value={subKind.get(l.subcontractor_id) ?? 'electrical'}
+            disabled={!canEdit}
+            onChange={(e) => void changeSubKind(l.subcontractor_id, e.target.value as Subcontractor['kind'])}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="rounded border border-slate-200 px-1 py-0.5 text-[11px] text-slate-500"
+            title="Category — sets which Cost of Subcontractors account the cost posts to"
+          >
+            {SUB_KIND.map((k) => <option key={k} value={k}>{SUB_KIND_LABEL[k]}</option>)}
+          </select>
+        </span>
+      ),
+      values: l.months,
+    })),
+    {
+      key: 'sub_total',
+      label: 'Total subcontractor revenue',
+      display: subTotals,
+      kind: 'subtotal' as const,
+      readOnly: true,
+    },
+    {
+      key: 'grand_total',
+      label: `TOTAL revenue → ${salesAccount.name}`,
+      display: grandTotals,
       kind: 'subtotal' as const,
       readOnly: true,
     },
@@ -256,8 +377,8 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
     },
     {
       key: 'cust_total',
-      label: 'TOTAL (must equal team total)',
-      display: teamTotals,
+      label: 'TOTAL (must equal total revenue)',
+      display: grandTotals,
       kind: 'subtotal' as const,
       readOnly: true,
     },
@@ -266,8 +387,8 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-500">
-        Budget revenue <b>by team</b> first — that sets the total that feeds the Sales line. Then allocate that
-        total <b>to customers</b> below; whatever is not yet allocated shows as <b>Other</b>.
+        Budget revenue <b>by team</b> and <b>by subcontractor</b> — together they set the total that feeds the Sales
+        line. Then allocate that total <b>to customers</b> below; whatever is not yet allocated shows as <b>Other</b>.
       </p>
       {err && <p className="text-sm text-red-600">{err}</p>}
 
@@ -296,6 +417,21 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
           </button>
           <button onClick={() => setShowManage((s) => !s)} className="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
             {showManage ? 'Hide' : 'Manage'} teams &amp; customers
+          </button>
+          <span className="mx-2 h-8 w-px bg-slate-200" />
+          <div>
+            <label className="block text-xs font-medium text-slate-500">Subcontractor</label>
+            <input value={newSubName} onChange={(e) => setNewSubName(e.target.value)} placeholder="name"
+              className="w-40 rounded border border-slate-300 px-2 py-1 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500">Category</label>
+            <select value={newSubKind} onChange={(e) => setNewSubKind(e.target.value as Subcontractor['kind'])} className="rounded border border-slate-300 px-2 py-1 text-sm">
+              {SUB_KIND.map((k) => <option key={k} value={k}>{SUB_KIND_LABEL[k]}</option>)}
+            </select>
+          </div>
+          <button onClick={() => void addSubcontractorLine()} className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
+            Add subcontractor
           </button>
         </div>
       )}
@@ -342,7 +478,23 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
       </div>
 
       <div>
-        <h3 className="mb-1 text-sm font-semibold text-sky-950">2 · Allocate to customers</h3>
+        <h3 className="mb-1 text-sm font-semibold text-sky-950">2 · Revenue by subcontractor</h3>
+        <p className="mb-1 text-xs text-slate-500">
+          Revenue earned through a subcontractor. It feeds Sales too, and the same subcontractor appears on the
+          <b> Subcontractors</b> tab to budget its cost.
+        </p>
+        <MonthGrid
+          rows={subRows}
+          monthHeaders={monthLabels(cycle.fy_year)}
+          labelHeader="Subcontractor"
+          readOnly={!canEdit}
+          latestActualIdx={latestActualIdx}
+          onChange={onChangeSub}
+        />
+      </div>
+
+      <div>
+        <h3 className="mb-1 text-sm font-semibold text-sky-950">3 · Allocate to customers</h3>
         <p className="mb-1 text-xs text-slate-500">
           Revenue allocated to <b>Capitec</b> or <b>Old Mutual</b> automatically raises a 5% internal charge on
           <i> Internal Sales - Capitec</i> — charged to this branch and allocated to CAP.
