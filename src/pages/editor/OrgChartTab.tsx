@@ -93,7 +93,7 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
 
   // --- pick the key roles -------------------------------------------------
   const bm = rows.find((r) => isBranchManager(r.title))
-  const opsMgr = rows.find((r) => r.category === 'Ops Cabling' && isOpsManager(r.title))
+  const opsMgrs = rows.filter((r) => r.category === 'Ops Cabling' && isOpsManager(r.title))
   const adminMgr = rows.find((r) => r.category === 'Admin' && isAdminManager(r.title))
   const seniorAdmin = rows.find((r) => r.category === 'Admin' && isSeniorAdmin(r.title))
   const adminHead = adminMgr ?? seniorAdmin
@@ -101,7 +101,8 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
 
   const used = new Set<number>()
   const take = (e?: Row) => { if (e) used.add(e.id!) }
-  take(bm); take(opsMgr); take(adminHead)
+  take(bm); take(adminHead)
+  opsMgrs.forEach((m) => used.add(m.id!))
   execs.forEach((e) => used.add(e.id!))
 
   // --- operations: grouped by the team each person is allocated to --------
@@ -131,8 +132,8 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
   const salesStaff = inCat('Sales').filter((r) => !used.has(r.id!))
   const unplaced = rows.filter((r) => r.category === 'Unassigned' && !used.has(r.id!))
 
-  const opsHead = opsMgr ?? bm
-  const opsCount = ops.length + opsAdmin.length + (opsMgr ? 1 : 0)
+  const opsHead = opsMgrs.length > 0 || !!bm
+  const opsCount = ops.length + opsAdmin.length + opsMgrs.length
 
   return (
     <div className="space-y-4">
@@ -176,9 +177,20 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
         </Column>
 
         <Column title="Operations" count={opsCount}>
-          {opsMgr
-            ? <Card e={opsMgr} tone="head" />
-            : <p className="text-[11px] italic text-amber-700">No Ops Manager — team leaders report to the Branch Manager</p>}
+          {opsMgrs.length === 1 && <Card e={opsMgrs[0]} tone="head" />}
+          {opsMgrs.length > 1 && (
+            <div className="rounded-md border border-sky-300 bg-sky-50 p-1.5">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                Operations Managers <span className="text-slate-400">· {opsMgrs.length}</span>
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {opsMgrs.map((m) => <Card key={m.id} e={m} tone="head" />)}
+              </div>
+            </div>
+          )}
+          {opsMgrs.length === 0 && (
+            <p className="text-[11px] italic text-amber-700">No Ops Manager — teams report to the Branch Manager</p>
+          )}
           <div className={opsHead ? 'ml-3 space-y-1.5 border-l border-slate-200 pl-3' : 'space-y-1.5'}>
             {teamGroups.map((g) => (
               <div key={g.tid} className="rounded-md border border-slate-200 bg-slate-50 p-1.5">
