@@ -17,7 +17,8 @@ const isBranchManager = (t?: string) => T(t).includes('BRANCH MANAGER')
 const isOpsManager = (t?: string) => T(t).includes('OPS MANAGER') || T(t).includes('OPERATIONS MANAGER')
 const isAdminManager = (t?: string) => T(t).startsWith('ADMIN MAN')
 const isSeniorAdmin = (t?: string) => T(t).startsWith('SNR ADMIN') || T(t).startsWith('SENIOR ADMIN')
-const isTeamLeader = (t?: string) => T(t).includes('TEAM LEADER')
+// team leaders, senior team leaders and project leaders all lead a team
+const isTeamLeader = (t?: string) => T(t).includes('TEAM LEADER') || T(t).includes('PROJECT LEADER')
 
 function Card({ e, tone = 'plain' }: { e: Row; tone?: 'top' | 'head' | 'plain' | 'muted' }) {
   const tones: Record<string, string> = {
