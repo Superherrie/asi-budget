@@ -14,7 +14,8 @@ const catSuffix = (name: string) => { const p = name.split(' - '); return p[p.le
 // Titles come from the payroll export and are truncated to ~15 chars,
 // so match on prefixes ("SNR ADMINISTRAT", "ADMIN MAN & STO").
 const isBranchManager = (t?: string) => T(t).includes('BRANCH MANAGER')
-const isOpsManager = (t?: string) => T(t).includes('OPS MANAGER') || T(t).includes('OPERATIONS MANAGER')
+// BU Manager heads Operations too (only within the Ops Cabling category)
+const isOpsManager = (t?: string) => T(t).includes('OPS MANAGER') || T(t).includes('OPERATIONS MANAGER') || T(t).includes('BU MANAGER')
 const isAdminManager = (t?: string) => T(t).startsWith('ADMIN MAN')
 const isSeniorAdmin = (t?: string) => T(t).startsWith('SNR ADMIN') || T(t).startsWith('SENIOR ADMIN')
 // team leaders, senior team leaders and project leaders all lead a team
