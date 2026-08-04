@@ -255,6 +255,7 @@ export default function VehiclesTab({ budget }: { budget: BudgetCtx }) {
         contextHeaders={['Base /mo']}
         labelHeader="Vehicle / cost"
         labelWidth="17rem"
+        comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'vehicles' }}
         readOnly={!canEdit}
         latestActualIdx={latestActualIdx}
         onChange={onChange}

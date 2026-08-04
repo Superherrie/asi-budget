@@ -390,6 +390,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
               monthHeaders={monthLabels(cycle.fy_year)}
               labelHeader="Employee"
               labelWidth="17rem"
+              comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'salaries' }}
               readOnly={!canEdit}
               latestActualIdx={latestActualIdx}
               onChange={onChange}
@@ -412,6 +413,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
           contextHeaders={billPeriod ? [billLabel] : []}
           labelHeader="Employee"
           labelWidth="17rem"
+          comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'cellphones' }}
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
           onChange={onChange}

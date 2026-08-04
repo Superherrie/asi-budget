@@ -195,6 +195,7 @@ export default function SubcontractorsTab({ budget }: { budget: BudgetCtx }) {
         rows={rows}
         monthHeaders={monthLabels(cycle.fy_year)}
         labelHeader="Subcontractor"
+        comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'subcontractors' }}
         readOnly={!canEdit}
         latestActualIdx={latestActualIdx}
         onChange={onChange}

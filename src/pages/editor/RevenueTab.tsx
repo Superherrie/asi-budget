@@ -476,6 +476,7 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
           labelHeader="Team"
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
+          comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'revenue' }}
           onChange={onChangeTeam}
         />
       </div>
@@ -492,6 +493,7 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
           labelHeader="Subcontractor"
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
+          comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'revenue_sub' }}
           onChange={onChangeSub}
         />
       </div>
@@ -513,6 +515,7 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
           labelHeader="Customer"
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
+          comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'revenue_cust' }}
           onChange={onChangeCust}
         />
       </div>

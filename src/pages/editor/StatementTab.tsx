@@ -221,6 +221,7 @@ export default function StatementTab({ budget }: { budget: BudgetCtx }) {
         monthHeaders={monthLabels(cycle.fy_year)}
         contextHeaders={['FY25 Act', 'FY26 Act']}
         labelHeader={`${cycle.name} Budget (R)`}
+        comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'statement' }}
         readOnly={!canEdit}
         latestActualIdx={latestActualIdx}
         onChange={onChange}

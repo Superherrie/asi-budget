@@ -1,8 +1,9 @@
 import {
   useCallback, useEffect, useMemo, useRef, useState,
-  type ClipboardEvent, type KeyboardEvent, type ReactNode,
+  type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode,
 } from 'react'
 import { fmt, fmtPct, parseAmount } from '../lib/format'
+import { supabase } from '../lib/supabase'
 
 export type GridRowKind = 'input' | 'section' | 'subtotal' | 'computed' | 'pct'
 
@@ -44,6 +45,8 @@ interface Props {
   labelWidth?: string
   /** Extra toolbar content rendered to the right of fill tools. */
   toolbarExtra?: ReactNode
+  /** Enable per-cell notes stored against this grid. */
+  comments?: { cycleId: number; ccId: number; scope: string }
 }
 
 interface Sel {
@@ -70,9 +73,54 @@ const labelStyles: Record<GridRowKind, string> = {
 
 export default function MonthGrid({
   rows, monthHeaders, contextHeaders = [], readOnly = false,
-  latestActualIdx = 11, onChange, labelHeader = '', labelWidth = '13rem', toolbarExtra,
+  latestActualIdx = 11, onChange, labelHeader = '', labelWidth = '13rem', toolbarExtra, comments,
 }: Props) {
   const labelCol = { width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }
+
+  // ----- per-cell notes -----
+  const [notes, setNotes] = useState<Map<string, string>>(new Map())
+  const [notePop, setNotePop] = useState<{ rowKey: string; month: number; text: string; x: number; y: number } | null>(null)
+  const noteKey = (rowKey: string, c: number) => `${rowKey}:${c + 1}`
+
+  useEffect(() => {
+    if (!comments) return
+    let cancelled = false
+    void supabase.from('budget_cell_comments')
+      .select('row_key, month, body')
+      .eq('cycle_id', comments.cycleId).eq('cost_centre_id', comments.ccId).eq('scope', comments.scope)
+      .then(({ data }) => {
+        if (cancelled) return
+        const m = new Map<string, string>()
+        for (const r of (data ?? []) as Record<string, unknown>[]) m.set(`${r.row_key}:${r.month}`, r.body as string)
+        setNotes(m)
+      })
+    return () => { cancelled = true }
+  }, [comments?.cycleId, comments?.ccId, comments?.scope])
+
+  function openNote(rowKey: string, c: number, e: MouseEvent) {
+    if (!comments || readOnly) return
+    e.preventDefault()
+    setNotePop({ rowKey, month: c + 1, text: notes.get(noteKey(rowKey, c)) ?? '', x: e.clientX, y: e.clientY })
+  }
+
+  async function saveNote(override?: string) {
+    if (!comments || !notePop) return
+    const body = (override ?? notePop.text).trim()
+    const k = `${notePop.rowKey}:${notePop.month}`
+    if (!body) {
+      await supabase.from('budget_cell_comments').delete()
+        .eq('cycle_id', comments.cycleId).eq('cost_centre_id', comments.ccId)
+        .eq('scope', comments.scope).eq('row_key', notePop.rowKey).eq('month', notePop.month)
+      setNotes((m) => { const n = new Map(m); n.delete(k); return n })
+    } else {
+      await supabase.from('budget_cell_comments').upsert(
+        { cycle_id: comments.cycleId, cost_centre_id: comments.ccId, scope: comments.scope, row_key: notePop.rowKey, month: notePop.month, body, updated_at: new Date().toISOString() },
+        { onConflict: 'cycle_id,cost_centre_id,scope,row_key,month' },
+      )
+      setNotes((m) => new Map(m).set(k, body))
+    }
+    setNotePop(null)
+  }
   const [sel, setSel] = useState<Sel | null>(null)
   const [editing, setEditing] = useState<{ r: number; c: number; text: string } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -335,6 +383,7 @@ export default function MonthGrid({
             </button>
           ))}
           <span className="ml-2 text-xs text-slate-400">Ctrl+C / Ctrl+V to copy &amp; paste (incl. from Excel)</span>
+          {comments && <span className="text-xs text-slate-400">· right-click a cell to add a note</span>}
           {toolbarExtra && <span className="ml-auto">{toolbarExtra}</span>}
         </div>
       )}
@@ -386,14 +435,17 @@ export default function MonthGrid({
                         const editable = isEditable(r)
                         const isEditingCell = editing && editing.r === r && editing.c === c
                         const focused = sel && sel.focus.r === r && sel.focus.c === c
+                        const note = comments ? notes.get(noteKey(row.key, c)) : undefined
                         return (
                           <td
                             key={c}
-                            className={`num-cell border-l border-slate-100 px-1 py-1 ${
+                            title={note}
+                            className={`num-cell relative border-l border-slate-100 px-1 py-1 ${
                               editable ? 'cursor-cell' : 'text-slate-400'
                             } ${editable && !inSel(r, c) ? 'bg-amber-50 hover:bg-amber-100' : ''} ${inSel(r, c) && editable ? 'bg-sky-100' : ''} ${
                               focused && editable ? 'ring-2 ring-inset ring-sky-500' : ''
                             }`}
+                            onContextMenu={editable ? (e) => openNote(row.key, c, e) : undefined}
                             onMouseDown={(e) => {
                               if (!editable) return
                               if (editing) commitEdit()
@@ -427,6 +479,9 @@ export default function MonthGrid({
                             ) : (
                               ''
                             )}
+                            {note && (
+                              <span aria-hidden className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-amber-500" />
+                            )}
                           </td>
                         )
                       })}
@@ -441,6 +496,38 @@ export default function MonthGrid({
           </tbody>
         </table>
       </div>
+
+      {notePop && (
+        <>
+          <div className="fixed inset-0 z-40" onMouseDown={() => setNotePop(null)} />
+          <div
+            className="fixed z-50 w-64 rounded-md border border-slate-300 bg-white p-2 shadow-lg"
+            style={{ left: Math.min(notePop.x, window.innerWidth - 270), top: Math.min(notePop.y, window.innerHeight - 150) }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <p className="mb-1 text-[11px] font-semibold text-slate-500">Note</p>
+            <textarea
+              autoFocus
+              value={notePop.text}
+              onChange={(e) => setNotePop({ ...notePop, text: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setNotePop(null)
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) void saveNote()
+              }}
+              rows={3}
+              placeholder="Add a note for this cell…"
+              className="w-full resize-none rounded border border-slate-300 p-1.5 text-xs outline-none focus:ring-1 focus:ring-sky-400"
+            />
+            <div className="mt-1 flex items-center gap-2">
+              <button onClick={() => void saveNote()} className="rounded bg-sky-800 px-2 py-1 text-xs font-medium text-white hover:bg-sky-700">Save</button>
+              {notes.has(`${notePop.rowKey}:${notePop.month}`) && (
+                <button onClick={() => void saveNote('')} className="text-xs text-red-500 hover:text-red-700">Remove</button>
+              )}
+              <button onClick={() => setNotePop(null)} className="ml-auto text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
