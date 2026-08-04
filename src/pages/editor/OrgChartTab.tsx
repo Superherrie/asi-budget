@@ -18,7 +18,6 @@ const isOpsManager = (t?: string) => T(t).includes('OPS MANAGER') || T(t).includ
 const isAdminManager = (t?: string) => T(t).startsWith('ADMIN MAN')
 const isSeniorAdmin = (t?: string) => T(t).startsWith('SNR ADMIN') || T(t).startsWith('SENIOR ADMIN')
 const isTeamLeader = (t?: string) => T(t).includes('TEAM LEADER')
-const isAssistant = (t?: string) => T(t).includes('ASSISTANT')
 
 function Card({ e, tone = 'plain' }: { e: Row; tone?: 'top' | 'head' | 'plain' | 'muted' }) {
   const tones: Record<string, string> = {
@@ -105,22 +104,27 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
   take(bm); take(opsMgr); take(adminHead)
   execs.forEach((e) => used.add(e.id!))
 
-  // --- operations ---------------------------------------------------------
+  // --- operations: grouped by the team each person is allocated to --------
   const ops = inCat('Ops Cabling').filter((r) => !used.has(r.id!))
-  const leaders = ops.filter((r) => isTeamLeader(r.title))
-  const assistants = ops.filter((r) => isAssistant(r.title))
-  const opsOther = ops.filter((r) => !isTeamLeader(r.title) && !isAssistant(r.title))
-
-  // assistants sit with the leader of the team they're allocated to
-  const leaderByTeam = new Map<number, Row>()
-  for (const l of leaders) if (l.teamId != null && !leaderByTeam.has(l.teamId)) leaderByTeam.set(l.teamId, l)
-  const underLeader = new Map<number, Row[]>()
-  const looseAssistants: Row[] = []
-  for (const a of assistants) {
-    const lead = a.teamId != null ? leaderByTeam.get(a.teamId) : undefined
-    if (lead) (underLeader.get(lead.id!) ?? underLeader.set(lead.id!, []).get(lead.id!)!).push(a)
-    else looseAssistants.push(a)
+  const byTeam = new Map<number, Row[]>()
+  const noTeamOps: Row[] = []
+  for (const o of ops) {
+    if (o.teamId != null) (byTeam.get(o.teamId) ?? byTeam.set(o.teamId, []).get(o.teamId)!).push(o)
+    else noTeamOps.push(o)
   }
+  // team leaders sort to the top of their team; teams sort by name
+  const teamGroups = [...byTeam.entries()]
+    .map(([tid, members]) => ({
+      tid,
+      name: teamName.get(tid) ?? 'Team',
+      members: [...members].sort((a, b) =>
+        (isTeamLeader(b.title) ? 1 : 0) - (isTeamLeader(a.title) ? 1 : 0) || a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  // team leaders with no team report to the Ops Manager directly;
+  // other unallocated ops staff (assistants etc.) go in the "no team" bucket
+  const noTeamLeaders = noTeamOps.filter((r) => isTeamLeader(r.title))
+  const looseOps = noTeamOps.filter((r) => !isTeamLeader(r.title))
 
   const adminStaff = inCat('Admin').filter((r) => !used.has(r.id!))
   const opsAdmin = inCat('Ops Admin').filter((r) => !used.has(r.id!))
@@ -128,7 +132,7 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
   const unplaced = rows.filter((r) => r.category === 'Unassigned' && !used.has(r.id!))
 
   const opsHead = opsMgr ?? bm
-  const opsCount = leaders.length + assistants.length + opsOther.length + opsAdmin.length + (opsMgr ? 1 : 0)
+  const opsCount = ops.length + opsAdmin.length + (opsMgr ? 1 : 0)
 
   return (
     <div className="space-y-4">
@@ -176,28 +180,25 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
             ? <Card e={opsMgr} tone="head" />
             : <p className="text-[11px] italic text-amber-700">No Ops Manager — team leaders report to the Branch Manager</p>}
           <div className={opsHead ? 'ml-3 space-y-1.5 border-l border-slate-200 pl-3' : 'space-y-1.5'}>
-            {leaders.map((l) => (
-              <div key={l.id}>
-                <Card e={l} />
-                <div className="ml-3 mt-1 space-y-1 border-l border-slate-200 pl-3">
-                  {(underLeader.get(l.id!) ?? []).map((a) => <Card key={a.id} e={a} tone="muted" />)}
-                  {!(underLeader.get(l.id!) ?? []).length && (
-                    <p className="text-[10px] text-slate-400">
-                      {l.teamId == null ? 'not allocated to a team' : `${teamName.get(l.teamId) ?? 'team'} — no assistants yet`}
-                    </p>
-                  )}
+            {teamGroups.map((g) => (
+              <div key={g.tid} className="rounded-md border border-slate-200 bg-slate-50 p-1.5">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-800">
+                  {g.name} <span className="text-slate-400">· {g.members.length}</span>
+                </p>
+                <div className="space-y-1">
+                  {g.members.map((m) => <Card key={m.id} e={m} tone={isTeamLeader(m.title) ? 'head' : 'muted'} />)}
                 </div>
               </div>
             ))}
-            {opsOther.map((e) => <Card key={e.id} e={e} />)}
+            {noTeamLeaders.map((l) => <Card key={l.id} e={l} />)}
             {opsAdmin.map((e) => <Card key={e.id} e={e} tone="muted" />)}
-            {looseAssistants.length > 0 && (
+            {looseOps.length > 0 && (
               <div className="rounded-md border border-dashed border-amber-300 bg-amber-50 p-2">
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                  Not allocated to a team leader · {looseAssistants.length}
+                  Not allocated to a team · {looseOps.length}
                 </p>
                 <div className="space-y-1">
-                  {looseAssistants.map((a) => <Card key={a.id} e={a} tone="muted" />)}
+                  {looseOps.map((a) => <Card key={a.id} e={a} tone="muted" />)}
                 </div>
               </div>
             )}
@@ -221,9 +222,9 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
 
       <p className="text-xs text-slate-400">
         Rules: Branch Manager at the top. Admin Manager (or senior admin), Ops Manager and Sales report to them.
-        Admin staff and cleaners report to the Admin Manager. Team leaders report to the Ops Manager (or Branch
-        Manager if there is none), and assistants sit with the leader of the team they are allocated to on the
-        Salaries tab. Ops-admin staff are shown under Operations.
+        Admin staff and cleaners report to the Admin Manager. Under Operations, staff are grouped by the team they
+        are allocated to on the Salaries tab (the team leader heads each team); team leaders with no team, and staff
+        allocated to no team, are listed separately. Ops-admin staff are shown under Operations.
       </p>
     </div>
   )
