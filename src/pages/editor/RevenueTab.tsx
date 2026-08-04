@@ -386,18 +386,16 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="max-w-3xl text-sm text-slate-500">
-          Budget revenue <b>by team</b> and <b>by subcontractor</b> — together they set the total that feeds the Sales
-          line. Then allocate that total <b>to customers</b> below; whatever is not yet allocated shows as <b>Other</b>.
-        </p>
-        {canEdit && (
-          <button onClick={() => setShowManage((s) => !s)}
-            className="shrink-0 rounded-md border border-brand-purple px-3 py-1.5 text-sm font-medium text-brand-purple hover:bg-sky-50">
-            {showManage ? 'Hide' : 'Manage'} teams &amp; customers
-          </button>
-        )}
-      </div>
+      {canEdit && (
+        <button onClick={() => setShowManage((s) => !s)}
+          className="rounded-md border border-brand-purple px-3 py-1.5 text-sm font-medium text-brand-purple hover:bg-sky-50">
+          {showManage ? 'Hide' : 'Manage'} teams &amp; customers
+        </button>
+      )}
+      <p className="max-w-3xl text-sm text-slate-500">
+        Budget revenue <b>by team</b> and <b>by subcontractor</b> — together they set the total that feeds the Sales
+        line. Then allocate that total <b>to customers</b> below; whatever is not yet allocated shows as <b>Other</b>.
+      </p>
       {err && <p className="text-sm text-red-600">{err}</p>}
 
       {canEdit && (
