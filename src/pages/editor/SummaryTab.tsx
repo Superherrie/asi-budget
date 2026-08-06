@@ -21,10 +21,18 @@ function yearlyByLine(accounts: Account[], values: Map<number, number[]> | undef
 type MetricKind = 'money' | 'pct'
 
 interface Metric {
-  key: string // statement line key
+  key: string // statement line key, or a synthetic key when `derive` is set
   label: string
   kind: MetricKind
   emphasis?: boolean // headline profit lines — bold, ruled above
+  /** Compute the value from the yearly line map (for lines the statement
+   *  engine doesn't emit, e.g. margins that aren't in computeStatement). */
+  derive?: (line: Map<string, number>) => number
+}
+
+const ratio = (num: string, den: string) => (line: Map<string, number>) => {
+  const d = line.get(den) ?? 0
+  return d ? (line.get(num) ?? 0) / d : 0
 }
 
 const METRICS: Metric[] = [
@@ -41,6 +49,7 @@ const METRICS: Metric[] = [
   { key: 't_ebitda', label: 'EBITDA', kind: 'money', emphasis: true },
   { key: 'p_ebitda', label: 'EBITDA %', kind: 'pct' },
   { key: 't_ebitda_ho', label: 'EBITDA after HO Fees', kind: 'money' },
+  { key: 'p_ebitda_ho', label: 'EBITDA after HO Fees %', kind: 'pct', derive: ratio('t_ebitda_ho', 't_sales') },
   { key: 't_ebit', label: 'EBIT', kind: 'money' },
   { key: 't_pbt', label: 'PBT', kind: 'money', emphasis: true },
   { key: 'p_pbt', label: 'PBT %', kind: 'pct' },
@@ -95,8 +104,8 @@ export default function SummaryTab({ budget }: { budget: BudgetCtx }) {
           </thead>
           <tbody>
             {METRICS.map((mtr) => {
-              const a = actual.get(mtr.key) ?? 0
-              const b = budgeted.get(mtr.key) ?? 0
+              const a = mtr.derive ? mtr.derive(actual) : actual.get(mtr.key) ?? 0
+              const b = mtr.derive ? mtr.derive(budgeted) : budgeted.get(mtr.key) ?? 0
               const delta = b - a
               const isPct = mtr.kind === 'pct'
               // Signed values: revenue/profit positive, costs negative, so a
