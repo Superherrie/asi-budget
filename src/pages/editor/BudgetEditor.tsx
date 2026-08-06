@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useParams } from 'react-router-dom'
 import { useBudget } from '../../hooks/useBudget'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
+import SummaryTab from './SummaryTab'
 import StatementTab from './StatementTab'
 import RevenueTab from './RevenueTab'
 import SalariesTab from './SalariesTab'
@@ -107,7 +108,8 @@ export default function BudgetEditor() {
       )}
 
       <nav className="mb-3 flex gap-1 border-b border-slate-200">
-        <NavLink to={`/cc/${cc.code}`} end className={tabClass}>Income Statement</NavLink>
+        <NavLink to={`/cc/${cc.code}`} end className={tabClass}>Summary</NavLink>
+        <NavLink to={`/cc/${cc.code}/statement`} className={tabClass}>Income Statement</NavLink>
         <NavLink to={`/cc/${cc.code}/revenue`} className={tabClass}>Revenue</NavLink>
         <NavLink to={`/cc/${cc.code}/salaries`} className={tabClass}>Salaries &amp; Cell Phones</NavLink>
         <NavLink to={`/cc/${cc.code}/vehicles`} className={tabClass}>Vehicles</NavLink>
@@ -117,7 +119,8 @@ export default function BudgetEditor() {
       </nav>
 
       <Routes>
-        <Route index element={<StatementTab budget={budget} />} />
+        <Route index element={<SummaryTab budget={budget} />} />
+        <Route path="statement" element={<StatementTab budget={budget} />} />
         <Route path="revenue" element={<RevenueTab budget={budget} />} />
         <Route path="salaries" element={<SalariesTab budget={budget} />} />
         <Route path="vehicles" element={<VehiclesTab budget={budget} />} />
