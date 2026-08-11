@@ -38,6 +38,11 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   const [fCell, setFCell] = useState('')
   const pending = useRef(new Map<number, number[]>())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // employees who have no cellphone line yet show an editable row; typed values
+  // are held here until the line is created on the first save (below).
+  const [cellDraft, setCellDraft] = useState<Map<number, number[]>>(new Map())
+  const pendingNewCell = useRef(new Map<number, number[]>())
+  const newCellTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function reload() {
     if (!cycle || !cc) return
@@ -125,6 +130,47 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     saveTimer.current = setTimeout(flush, 600)
   }
 
+  // Cell Phones grid: existing lines (`l<id>`) go through the normal path;
+  // editing an as-yet-unsaved employee row (`new<empId>`) buffers the values
+  // and creates the line on flush, so every employee is open to budget without
+  // first clicking "add".
+  function onCellChange(updates: CellUpdate[]) {
+    const existing = updates.filter((u) => u.rowKey.startsWith('l'))
+    const fresh = updates.filter((u) => u.rowKey.startsWith('new'))
+    if (existing.length) onChange(existing)
+    if (!fresh.length) return
+    setCellDraft((prev) => {
+      const next = new Map(prev)
+      for (const u of fresh) {
+        const empId = Number(u.rowKey.slice(3))
+        const months = [...(next.get(empId) ?? Array(12).fill(0))]
+        months[u.monthIdx] = u.value
+        next.set(empId, months)
+        pendingNewCell.current.set(empId, months)
+      }
+      return next
+    })
+    if (newCellTimer.current) clearTimeout(newCellTimer.current)
+    newCellTimer.current = setTimeout(() => void flushNewCell(), 600)
+  }
+
+  async function flushNewCell() {
+    const batch = [...pendingNewCell.current.entries()]
+    pendingNewCell.current.clear()
+    const inserts = batch
+      .map(([empId, months]) => {
+        const emp = employees.find((e) => e.id === empId)
+        const accId = emp ? cellAccountFor(emp) : undefined
+        return accId ? { employee_id: empId, kind: 'cellphone', account_id: accId, ...monthCols(months) } : null
+      })
+      .filter(Boolean) as Record<string, unknown>[]
+    if (!inserts.length) return
+    const { error } = await supabase.from('budget_employee_lines').insert(inserts)
+    if (error) { setErr(error.message); return }
+    setCellDraft(new Map())
+    await reload()
+  }
+
   async function addEmployee() {
     setErr(null)
     if (!fName.trim() || !fSalAcc) {
@@ -194,16 +240,6 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
       else next.delete(employeeId)
       return next
     })
-  }
-
-  async function addCellLine(emp: Employee) {
-    const accId = cellAccountFor(emp)
-    if (!accId) return
-    const { error } = await supabase.from('budget_employee_lines').insert({
-      employee_id: emp.id, kind: 'cellphone', account_id: accId,
-    })
-    if (error) setErr(error.message)
-    else await reload()
   }
 
   function accountSelect(line: EmpLine, options: typeof salaryAccounts) {
@@ -277,20 +313,37 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     for (const emp of emps) {
       const line = lines.find((l) => l.employee_id === emp.id && l.kind === kind)
       if (!line) {
+        // No saved cellphone line yet — show an open, editable row. It becomes a
+        // real line on first save (flushNewCell). Falls back to a note when the
+        // employee's category has no matching Cell Phones account.
         if (kind === 'cellphone' && canEdit) {
-          rows.push({
-            key: `nocell${emp.id}`,
-            label: (
-              <span className="inline-flex items-center gap-2 text-slate-400">
-                {emp.name}
-                {phoneTag(emp)}
-                <button onClick={() => void addCellLine(emp)} className="rounded border border-slate-300 px-1.5 text-[11px] hover:bg-sky-50">
-                  + add cell phone
-                </button>
-              </span>
-            ),
-            display: null, readOnly: true, kind: 'input', context: billed(emp),
-          })
+          const cellAcc = cellAccountFor(emp)
+          if (cellAcc) {
+            const draft = cellDraft.get(emp.id!) ?? Array(12).fill(0)
+            draft.forEach((v, i) => (totals[i] += v))
+            rows.push({
+              key: `new${emp.id}`,
+              label: (
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="font-medium">{emp.name}</span>
+                  {emp.title && <span className="text-slate-400">{emp.title}</span>}
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500" title="Auto-linked to the employee’s category">
+                    {accById.get(cellAcc)?.name ?? '—'}
+                  </span>
+                  {phoneTag(emp)}
+                </span>
+              ),
+              values: draft,
+              costRow: true,
+              context: billed(emp),
+            })
+          } else {
+            rows.push({
+              key: `nocell${emp.id}`,
+              label: <span className="inline-flex items-center gap-2 text-slate-400">{emp.name}{phoneTag(emp)}<span className="text-[11px]">no cell phone account for this category</span></span>,
+              display: null, readOnly: true, kind: 'input', context: billed(emp),
+            })
+          }
         }
         continue
       }
@@ -416,7 +469,7 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
           comments={{ cycleId: cycle.id, ccId: cc.id, scope: 'cellphones' }}
           readOnly={!canEdit}
           latestActualIdx={latestActualIdx}
-          onChange={onChange}
+          onChange={onCellChange}
         />
         {unbilled.length > 0 && (
           <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3">
