@@ -29,6 +29,8 @@ export default function CompanyView() {
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [filter, setFilter] = useState<'all' | 'submitted' | 'approved'>('all')
   const [loaded, setLoaded] = useState(false)
+  // Training/demo cost centres are excluded from every company roll-up.
+  const [excludedIds, setExcludedIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     void (async () => {
@@ -36,23 +38,28 @@ export default function CompanyView() {
         .order('fy_year', { ascending: false }).limit(1).maybeSingle()).data as Cycle | null
       if (!cyc) { setLoaded(true); return }
       setCycle(cyc)
-      const [accRes, viewRes, actRes, apprRes] = await Promise.all([
+      const [accRes, viewRes, actRes, apprRes, demoRes] = await Promise.all([
         supabase.from('budget_accounts').select('*').order('sort_order'),
         supabase.from('budget_statement_lines').select('*').eq('cycle_id', cyc.id),
         supabase.from('budget_actuals').select('*'),
         supabase.from('budget_approvals').select('*').eq('cycle_id', cyc.id),
+        supabase.from('budget_cost_centres').select('id').eq('code', 'DEMO'),
       ])
+      const excluded = new Set<number>(((demoRes.data ?? []) as { id: number }[]).map((r) => r.id))
+      setExcludedIds(excluded)
       setAccounts((accRes.data as Account[]) ?? [])
       const byCc: CcValues = new Map()
       for (const r of viewRes.data ?? []) {
         const cc = r.cost_centre_id as number
+        if (excluded.has(cc)) continue
         if (!byCc.has(cc)) byCc.set(cc, new Map())
         byCc.get(cc)!.set(r.account_id as number, monthsOf(r))
       }
       setBudgetByCc(byCc)
-      // company-wide actuals summed per FY per account
+      // company-wide actuals summed per FY per account (demo excluded)
       const act = new Map<number, Map<number, number[]>>()
       for (const r of actRes.data ?? []) {
+        if (excluded.has(r.cost_centre_id as number)) continue
         const fy = r.fy_year as number
         if (!act.has(fy)) act.set(fy, new Map())
         const m = act.get(fy)!
@@ -72,12 +79,13 @@ export default function CompanyView() {
   const includedCcs = useMemo(
     () =>
       costCentres.filter((cc) => {
+        if (excludedIds.has(cc.id)) return false
         if (filter === 'all') return true
         const s = statusOf(cc.id)
         return filter === 'approved' ? s === 'approved' : s === 'submitted' || s === 'approved'
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [costCentres, filter, approvals],
+    [costCentres, filter, approvals, excludedIds],
   )
 
   const companyValues = useMemo(() => {
