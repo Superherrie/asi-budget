@@ -43,6 +43,10 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
   const [cellDraft, setCellDraft] = useState<Map<number, number[]>>(new Map())
   const pendingNewCell = useRef(new Map<number, number[]>())
   const newCellTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // annual increase controls
+  const [incMonth, setIncMonth] = useState(0)
+  const [incPct, setIncPct] = useState('')
+  const [incBusy, setIncBusy] = useState(false)
 
   async function reload() {
     if (!cycle || !cc) return
@@ -169,6 +173,34 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
     if (error) { setErr(error.message); return }
     setCellDraft(new Map())
     await reload()
+  }
+
+  // Annual increase: raise every employee's salary by a % from a chosen month
+  // onward (earlier months keep the current figure, so mid-year increases step
+  // up correctly). Cost values are negative, so multiplying grows the cost.
+  async function applyIncrease() {
+    setErr(null)
+    const pct = parseAmount(incPct)
+    if (pct == null || pct === 0) { setErr('Enter an increase percentage (e.g. 6).'); return }
+    const salLines = lines.filter((l) => l.kind === 'salary')
+    if (!salLines.length) { setErr('There are no salaries to increase.'); return }
+    const factor = 1 + pct / 100
+    const monthName = monthLabels(cycle!.fy_year)[incMonth]
+    if (!window.confirm(`Apply a ${pct}% increase to all ${salLines.length} salaries from ${monthName} onward?`)) return
+    setIncBusy(true)
+    const updated = salLines.map((l) => ({
+      id: l.id,
+      months: l.months.map((v, i) => (i >= incMonth ? Math.round(v * factor * 100) / 100 : v)),
+    }))
+    const results = await Promise.all(
+      updated.map((u) => supabase.from('budget_employee_lines').update(monthCols(u.months)).eq('id', u.id)),
+    )
+    const failed = results.find((r) => r.error)
+    if (failed?.error) { setErr(failed.error.message); setIncBusy(false); return }
+    const byId = new Map(updated.map((u) => [u.id, u.months]))
+    setLines((prev) => prev.map((l) => (byId.has(l.id) ? { ...l, months: byId.get(l.id)! } : l)))
+    setIncBusy(false)
+    setIncPct('')
   }
 
   async function addEmployee() {
@@ -432,7 +464,40 @@ export default function SalariesTab({ budget }: { budget: BudgetCtx }) {
         </div>
       )}
       <div className="space-y-5">
-        <h3 className="text-sm font-semibold text-sky-950">Salaries by category</h3>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h3 className="text-sm font-semibold text-sky-950">Salaries by category</h3>
+          {canEdit && (
+            <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-2">
+              <span className="pb-1.5 text-xs font-medium text-slate-500">Annual increase</span>
+              <div>
+                <label className="block text-[10px] text-slate-400">Effective from</label>
+                <select
+                  value={incMonth}
+                  onChange={(e) => setIncMonth(Number(e.target.value))}
+                  className="rounded border border-slate-300 px-2 py-1 text-sm"
+                >
+                  {monthLabels(cycle.fy_year).map((m, i) => <option key={i} value={i}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-400">Increase %</label>
+                <input
+                  value={incPct}
+                  onChange={(e) => setIncPct(e.target.value)}
+                  placeholder="6"
+                  className="w-16 rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+              </div>
+              <button
+                onClick={() => void applyIncrease()}
+                disabled={incBusy}
+                className="rounded-md bg-sky-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {incBusy ? 'Applying…' : 'Apply increase'}
+              </button>
+            </div>
+          )}
+        </div>
         {salaryGroups.map(([cat, emps]) => (
           <div key={cat}>
             <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
