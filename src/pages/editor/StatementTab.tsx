@@ -33,7 +33,7 @@ const detailTab: Record<string, { path: string; label: string }> = {
 const AUTO_NOTE: Record<string, string> = {
   ho_alloc: 'Head Office allocation',
   rti: 'auto — 3% of total revenue',
-  internal_sales: 'auto — internal charge to CAP',
+  internal_sales: 'auto — internal charge',
   depreciation: 'auto — opening + capex',
 }
 
