@@ -20,6 +20,8 @@ const isAdminManager = (t?: string) => T(t).startsWith('ADMIN MAN')
 const isSeniorAdmin = (t?: string) => T(t).startsWith('SNR ADMIN') || T(t).startsWith('SENIOR ADMIN')
 // team leaders, senior team leaders and project leaders all lead a team
 const isTeamLeader = (t?: string) => T(t).includes('TEAM LEADER') || T(t).includes('PROJECT LEADER')
+// store controllers report to the Admin Manager wherever their salary sits
+const isStoreController = (t?: string) => T(t).includes('STORE') && T(t).includes('CONTROL')
 
 function Card({ e, tone = 'plain' }: { e: Row; tone?: 'top' | 'head' | 'plain' | 'muted' }) {
   const tones: Record<string, string> = {
@@ -106,6 +108,10 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
   take(bm); take(adminHead)
   opsMgrs.forEach((m) => used.add(m.id!))
   execs.forEach((e) => used.add(e.id!))
+  // Store controllers always report to the Admin Manager, regardless of the
+  // salary category their cost sits in — pull them out before the buckets.
+  const storeControllers = rows.filter((r) => isStoreController(r.title) && !used.has(r.id!))
+  storeControllers.forEach((r) => used.add(r.id!))
 
   // --- operations: grouped by the team each person is allocated to --------
   const ops = inCat('Ops Cabling').filter((r) => !used.has(r.id!))
@@ -130,6 +136,8 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
   const looseOps = noTeamOps.filter((r) => !isTeamLeader(r.title))
 
   const adminStaff = inCat('Admin').filter((r) => !used.has(r.id!))
+  // admin staff plus any store controllers pulled in from other categories
+  const adminReports = [...adminStaff, ...storeControllers].sort((a, b) => a.name.localeCompare(b.name))
   const opsAdmin = inCat('Ops Admin').filter((r) => !used.has(r.id!))
   const salesStaff = inCat('Sales').filter((r) => !used.has(r.id!))
   const unplaced = rows.filter((r) => r.category === 'Unassigned' && !used.has(r.id!))
@@ -161,20 +169,20 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
 
       {/* three reporting lines */}
       <div className="flex flex-wrap gap-6 border-t border-slate-200 pt-4">
-        <Column title="Admin" count={adminStaff.length + (adminHead ? 1 : 0)}>
+        <Column title="Admin" count={adminReports.length + (adminHead ? 1 : 0)}>
           {adminHead
             ? <>
                 <Card e={adminHead} tone="head" />
                 {!adminMgr && <p className="text-[10px] italic text-amber-700">No Admin Manager — senior admin heads this line</p>}
                 <div className="ml-3 space-y-1.5 border-l border-slate-200 pl-3">
-                  {adminStaff.map((e) => <Card key={e.id} e={e} />)}
-                  {!adminStaff.length && <p className="text-[11px] text-slate-400">No admin staff</p>}
+                  {adminReports.map((e) => <Card key={e.id} e={e} />)}
+                  {!adminReports.length && <p className="text-[11px] text-slate-400">No admin staff</p>}
                 </div>
               </>
             : <>
                 <p className="text-[11px] italic text-amber-700">No Admin Manager or senior admin — reporting to the Branch Manager</p>
-                {adminStaff.map((e) => <Card key={e.id} e={e} />)}
-                {!adminStaff.length && <p className="text-[11px] text-slate-400">No admin staff</p>}
+                {adminReports.map((e) => <Card key={e.id} e={e} />)}
+                {!adminReports.length && <p className="text-[11px] text-slate-400">No admin staff</p>}
               </>}
         </Column>
 
@@ -236,7 +244,7 @@ export default function OrgChartTab({ budget }: { budget: BudgetCtx }) {
 
       <p className="text-xs text-slate-400">
         Rules: Branch Manager at the top. Admin Manager (or senior admin), Ops Manager and Sales report to them.
-        Admin staff and cleaners report to the Admin Manager. Under Operations, staff are grouped by the team they
+        Admin staff, cleaners and store controllers report to the Admin Manager. Under Operations, staff are grouped by the team they
         are allocated to on the Salaries tab (the team leader heads each team); team leaders with no team, and staff
         allocated to no team, are listed separately. Ops-admin staff are shown under Operations.
       </p>
