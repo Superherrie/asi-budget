@@ -26,7 +26,7 @@ export default function Layout() {
           <div className="flex items-center justify-between gap-3 pt-3">
             <div className="flex items-center gap-2">
               <img src="brand/logo_white.png" alt="ASI Connect" className="h-7 sm:h-8" />
-              <span className="font-display text-sm font-semibold tracking-tight text-white/70">Budget</span>
+              <span className="font-display text-base font-semibold tracking-tight text-white/90 sm:text-lg">Budget &amp; Forecasting</span>
             </div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85 sm:text-[11px]">Connecting business to purpose</p>
           </div>
