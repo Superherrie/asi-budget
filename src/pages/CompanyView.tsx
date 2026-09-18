@@ -11,6 +11,23 @@ import { useAuth } from '../context/AuthContext'
 import type { Account, Approval, ApprovalStatus, Cycle } from '../lib/types'
 
 type CcValues = Map<number, Map<number, number[]>> // cc -> account -> months
+type Row = Record<string, unknown>
+
+// PostgREST caps a single response at 1000 rows; page through so company-wide
+// tables (budget_actuals, the statement view) are summed in full.
+async function fetchAllRows(
+  page: (from: number, to: number) => PromiseLike<{ data: Row[] | null }>,
+): Promise<Row[]> {
+  const SIZE = 1000
+  const all: Row[] = []
+  for (let from = 0; ; from += SIZE) {
+    const { data } = await page(from, from + SIZE - 1)
+    const rows = data ?? []
+    all.push(...rows)
+    if (rows.length < SIZE) break
+  }
+  return all
+}
 
 function totalsFor(accounts: Account[], values: Map<number, number[]>) {
   const single = new Map<number, number[]>()
@@ -38,18 +55,19 @@ export default function CompanyView() {
         .order('fy_year', { ascending: false }).limit(1).maybeSingle()).data as Cycle | null
       if (!cyc) { setLoaded(true); return }
       setCycle(cyc)
-      const [accRes, viewRes, actRes, apprRes, demoRes] = await Promise.all([
+      const [accRes, apprRes, demoRes, viewRows, actRows] = await Promise.all([
         supabase.from('budget_accounts').select('*').order('sort_order'),
-        supabase.from('budget_statement_lines').select('*').eq('cycle_id', cyc.id),
-        supabase.from('budget_actuals').select('*'),
         supabase.from('budget_approvals').select('*').eq('cycle_id', cyc.id),
         supabase.from('budget_cost_centres').select('id').eq('code', 'DEMO'),
+        // both of these can exceed PostgREST's 1000-row cap, so page through them
+        fetchAllRows((from, to) => supabase.from('budget_statement_lines').select('*').eq('cycle_id', cyc.id).range(from, to)),
+        fetchAllRows((from, to) => supabase.from('budget_actuals').select('*').range(from, to)),
       ])
       const excluded = new Set<number>(((demoRes.data ?? []) as { id: number }[]).map((r) => r.id))
       setExcludedIds(excluded)
       setAccounts((accRes.data as Account[]) ?? [])
       const byCc: CcValues = new Map()
-      for (const r of viewRes.data ?? []) {
+      for (const r of viewRows) {
         const cc = r.cost_centre_id as number
         if (excluded.has(cc)) continue
         if (!byCc.has(cc)) byCc.set(cc, new Map())
@@ -58,7 +76,7 @@ export default function CompanyView() {
       setBudgetByCc(byCc)
       // company-wide actuals summed per FY per account (demo excluded)
       const act = new Map<number, Map<number, number[]>>()
-      for (const r of actRes.data ?? []) {
+      for (const r of actRows) {
         if (excluded.has(r.cost_centre_id as number)) continue
         const fy = r.fy_year as number
         if (!act.has(fy)) act.set(fy, new Map())
