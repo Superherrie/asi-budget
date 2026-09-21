@@ -41,6 +41,9 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
   const [custLines, setCustLines] = useState<CustLine[]>([])
   const [subs, setSubs] = useState<Subcontractor[]>([])
   const [subLines, setSubLines] = useState<SubRevLine[]>([])
+  // CAP only: what every branch budgeted for the key customers (via a
+  // security-definer RPC, so cross-branch data is visible to the Service Desk)
+  const [keyRev, setKeyRev] = useState<{ customer: string; code: string; name: string; months: number[] }[]>([])
   const [loaded, setLoaded] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [newTeam, setNewTeam] = useState('')
@@ -88,6 +91,15 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
       customer_id: r.customer_id as number,
       months: monthsOf(r),
     })))
+    if (cc.code === 'CAP') {
+      const { data: kr } = await supabase.rpc('budget_key_customer_revenue', { p_cycle: cycle.id })
+      setKeyRev(((kr ?? []) as Record<string, unknown>[]).map((r) => ({
+        customer: r.customer_name as string,
+        code: r.branch_code as string,
+        name: r.branch_name as string,
+        months: monthsOf(r),
+      })))
+    }
     setLoaded(true)
   }
 
@@ -384,6 +396,31 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
     },
   ]
 
+  // CAP Service Desk: key-customer revenue grouped by customer, branch rows + totals
+  const keyRevRows: GridRow[] = []
+  {
+    const byCustomer = new Map<string, typeof keyRev>()
+    for (const r of keyRev) {
+      if (!byCustomer.has(r.customer)) byCustomer.set(r.customer, [])
+      byCustomer.get(r.customer)!.push(r)
+    }
+    const grand = Z()
+    for (const [customer, list] of [...byCustomer.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      keyRevRows.push({ key: `kh_${customer}`, label: customer, kind: 'section' })
+      const tot = Z()
+      for (const r of [...list].sort((a, b) => a.code.localeCompare(b.code))) {
+        r.months.forEach((v, i) => { tot[i] += v; grand[i] += v })
+        keyRevRows.push({
+          key: `kr_${customer}_${r.code}`,
+          label: <span className="text-slate-600">{r.code}{r.name && r.name !== r.code ? ` — ${r.name}` : ''}</span>,
+          display: r.months, readOnly: true, indent: 1,
+        })
+      }
+      keyRevRows.push({ key: `kt_${customer}`, label: `Total ${customer}`, display: tot, kind: 'subtotal', readOnly: true, indent: 1 })
+    }
+    if (keyRevRows.length) keyRevRows.push({ key: 'kt_all', label: 'Total key customers', display: grand, kind: 'subtotal', readOnly: true })
+  }
+
   return (
     <div className="space-y-6">
       {canEdit && (
@@ -519,6 +556,27 @@ export default function RevenueTab({ budget }: { budget: BudgetCtx }) {
           onChange={onChangeCust}
         />
       </div>
+
+      {cc.code === 'CAP' && (
+        <div>
+          <h3 className="mb-1 text-sm font-semibold text-sky-950">Key customer revenue by branch</h3>
+          <p className="mb-1 text-xs text-slate-500">
+            Read-only — what each branch has budgeted for <b>Capitec</b>, <b>Old Mutual Finance</b> and <b>Yantek</b>,
+            compiled across all branches for the Service Desk.
+          </p>
+          {keyRevRows.length ? (
+            <MonthGrid
+              rows={keyRevRows}
+              monthHeaders={monthLabels(cycle.fy_year)}
+              labelHeader="Customer / branch"
+              labelWidth="18rem"
+              readOnly
+            />
+          ) : (
+            <p className="text-xs text-slate-400">No branch has budgeted revenue for these customers yet.</p>
+          )}
+        </div>
+      )}
 
       {materialAccount && (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
