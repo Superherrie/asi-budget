@@ -189,6 +189,17 @@ export default function CompanyView() {
               )
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-slate-300 bg-sky-50 font-semibold text-sky-950">
+              <td className="px-2 py-1.5">Total</td>
+              <td className="px-2 py-1.5" />
+              {keyLines.map(([k]) => (
+                <td key={k} className="num-cell px-2 py-1.5">
+                  {fmt(includedCcs.reduce((s, cc) => s + (perCcTotals.get(cc.id)?.get(k) ?? 0), 0))}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
         </table>
       </div>
 
