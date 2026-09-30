@@ -4,7 +4,7 @@ import MonthGrid, { type GridRow } from '../components/MonthGrid'
 import StatusBadge from '../components/StatusBadge'
 import { computeStatement } from '../lib/statement'
 import { monthLabels } from '../lib/months'
-import { fmt } from '../lib/format'
+import { fmt, fmtPct } from '../lib/format'
 import { supabase } from '../lib/supabase'
 import { monthsOf } from '../hooks/useBudget'
 import { useAuth } from '../context/AuthContext'
@@ -139,10 +139,30 @@ export default function CompanyView() {
     context: [ctx25.get(line.key) ?? null, ctx26.get(line.key) ?? null],
   }))
 
-  const keyLines: [string, string][] = [
-    ['t_sales', 'Sales'], ['t_gp', 'Gross Profit'], ['t_ebitda', 'EBITDA'],
-    ['t_ebitda_ho', 'EBITDA after HO'], ['t_pbt', 'PBT'],
+  // money columns show a rand total; pct columns show num/den as a percentage
+  // (weighted correctly on the Total row: Σnum / Σden, not an average of ratios)
+  type Col = { label: string } & ({ money: string } | { num: string; den: string })
+  const columns: Col[] = [
+    { label: 'Sales', money: 't_sales' },
+    { label: 'Gross Profit', money: 't_gp' },
+    { label: 'GP %', num: 't_gp', den: 't_sales' },
+    { label: 'EBITDA', money: 't_ebitda' },
+    { label: 'EBITDA after HO', money: 't_ebitda_ho' },
+    { label: 'EBITDA after HO %', num: 't_ebitda_ho', den: 't_sales' },
+    { label: 'PBT', money: 't_pbt' },
   ]
+  const cell = (t: Map<string, number> | undefined, c: Col) => {
+    const g = (k: string) => t?.get(k) ?? 0
+    if ('money' in c) return fmt(g(c.money))
+    const den = g(c.den)
+    return fmtPct(den ? g(c.num) / den : 0)
+  }
+  const totalCell = (c: Col) => {
+    const sum = (k: string) => includedCcs.reduce((s, cc) => s + (perCcTotals.get(cc.id)?.get(k) ?? 0), 0)
+    if ('money' in c) return fmt(sum(c.money))
+    const den = sum(c.den)
+    return fmtPct(den ? sum(c.num) / den : 0)
+  }
 
   return (
     <div className="space-y-5">
@@ -166,8 +186,8 @@ export default function CompanyView() {
             <tr className="bg-sky-950 text-white">
               <th className="px-2 py-1.5 text-left font-medium">Cost centre</th>
               <th className="px-2 py-1.5 text-left font-medium">Status</th>
-              {keyLines.map(([k, label]) => (
-                <th key={k} className="px-2 py-1.5 text-right font-medium">{label}</th>
+              {columns.map((c) => (
+                <th key={c.label} className="px-2 py-1.5 text-right font-medium">{c.label}</th>
               ))}
             </tr>
           </thead>
@@ -182,8 +202,8 @@ export default function CompanyView() {
                     </Link>
                   </td>
                   <td className="px-2 py-1"><StatusBadge status={statusOf(cc.id)} /></td>
-                  {keyLines.map(([k]) => (
-                    <td key={k} className="num-cell px-2 py-1">{fmt(t?.get(k) ?? 0)}</td>
+                  {columns.map((c) => (
+                    <td key={c.label} className="num-cell px-2 py-1">{cell(t, c)}</td>
                   ))}
                 </tr>
               )
@@ -193,10 +213,8 @@ export default function CompanyView() {
             <tr className="border-t-2 border-slate-300 bg-sky-50 font-semibold text-sky-950">
               <td className="px-2 py-1.5">Total</td>
               <td className="px-2 py-1.5" />
-              {keyLines.map(([k]) => (
-                <td key={k} className="num-cell px-2 py-1.5">
-                  {fmt(includedCcs.reduce((s, cc) => s + (perCcTotals.get(cc.id)?.get(k) ?? 0), 0))}
-                </td>
+              {columns.map((c) => (
+                <td key={c.label} className="num-cell px-2 py-1.5">{totalCell(c)}</td>
               ))}
             </tr>
           </tfoot>
