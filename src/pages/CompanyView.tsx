@@ -148,31 +148,31 @@ export default function CompanyView() {
     context: [ctx25.get(line.key) ?? null, ctx26.get(line.key) ?? null],
   }))
 
-  // money columns show a rand total; pct columns show num/den as a percentage
-  // (weighted correctly on the Total row: Σnum / Σden, not an average of ratios)
-  type Col = { label: string } & ({ money: string } | { num: string; den: string })
+  // Each column renders from a key-getter `g` (per cost centre) or `s` (Σ over a
+  // list). Using the same function for both makes subtotals/totals correct:
+  // money = Σ of a (possibly computed) line; pct = (computed num) / (computed den),
+  // weighted on totals. HO charge = EBITDA after HO − EBITDA (what the branch pays HO).
+  type G = (k: string) => number
+  type Col = { label: string; render: (g: G) => string }
+  const money = (label: string, f: (g: G) => number): Col => ({ label, render: (g) => fmt(f(g)) })
+  const pctOf = (label: string, num: (g: G) => number, den: (g: G) => number): Col =>
+    ({ label, render: (g) => { const d = den(g); return fmtPct(d ? num(g) / d : 0) } })
+  const hoCharge = (g: G) => g('t_ebitda_ho') - g('t_ebitda')
   const columns: Col[] = [
-    { label: 'Sales', money: 't_sales' },
-    { label: 'Gross Profit', money: 't_gp' },
-    { label: 'GP %', num: 't_gp', den: 't_sales' },
-    { label: 'EBITDA', money: 't_ebitda' },
-    { label: 'EBITDA after HO', money: 't_ebitda_ho' },
-    { label: 'EBITDA after HO %', num: 't_ebitda_ho', den: 't_sales' },
-    { label: 'PBT', money: 't_pbt' },
+    money('Sales', (g) => g('t_sales')),
+    money('Gross Profit', (g) => g('t_gp')),
+    pctOf('GP %', (g) => g('t_gp'), (g) => g('t_sales')),
+    money('EBITDA', (g) => g('t_ebitda')),
+    money('HO charge', hoCharge),
+    pctOf('HO charge %', hoCharge, (g) => g('t_sales')),
+    money('EBITDA after HO', (g) => g('t_ebitda_ho')),
+    pctOf('EBITDA after HO %', (g) => g('t_ebitda_ho'), (g) => g('t_sales')),
+    money('PBT', (g) => g('t_pbt')),
   ]
-  const cell = (t: Map<string, number> | undefined, c: Col) => {
-    const g = (k: string) => t?.get(k) ?? 0
-    if ('money' in c) return fmt(g(c.money))
-    const den = g(c.den)
-    return fmtPct(den ? g(c.num) / den : 0)
-  }
-  // subtotal/total over any list of cost centres (money = Σ, pct = Σnum/Σden)
-  const sumCell = (ccList: typeof includedCcs, c: Col) => {
-    const sum = (k: string) => ccList.reduce((s, cc) => s + (perCcTotals.get(cc.id)?.get(k) ?? 0), 0)
-    if ('money' in c) return fmt(sum(c.money))
-    const den = sum(c.den)
-    return fmtPct(den ? sum(c.num) / den : 0)
-  }
+  // getter for one cost centre's totals, and for a Σ over a list of cost centres
+  const getFor = (t: Map<string, number> | undefined): G => (k) => t?.get(k) ?? 0
+  const sumOver = (ccList: typeof includedCcs): G => (k) =>
+    ccList.reduce((s, cc) => s + (perCcTotals.get(cc.id)?.get(k) ?? 0), 0)
 
   // group the included cost centres into the business verticals
   const groups = VERTICALS
@@ -227,7 +227,7 @@ export default function CompanyView() {
                       </td>
                       <td className="px-2 py-1"><StatusBadge status={statusOf(cc.id)} /></td>
                       {columns.map((c) => (
-                        <td key={c.label} className="num-cell px-2 py-1">{cell(t, c)}</td>
+                        <td key={c.label} className="num-cell px-2 py-1">{c.render(getFor(t))}</td>
                       ))}
                     </tr>
                   )
@@ -235,7 +235,7 @@ export default function CompanyView() {
                 <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
                   <td colSpan={2} className="px-2 py-1">Total {g.label}</td>
                   {columns.map((c) => (
-                    <td key={c.label} className="num-cell px-2 py-1">{sumCell(g.ccs, c)}</td>
+                    <td key={c.label} className="num-cell px-2 py-1">{c.render(sumOver(g.ccs))}</td>
                   ))}
                 </tr>
               </Fragment>
@@ -245,7 +245,7 @@ export default function CompanyView() {
             <tr className="border-t-2 border-slate-300 bg-sky-50 font-semibold text-sky-950">
               <td colSpan={2} className="px-2 py-1.5">Total — all cost centres</td>
               {columns.map((c) => (
-                <td key={c.label} className="num-cell px-2 py-1.5">{sumCell(includedCcs, c)}</td>
+                <td key={c.label} className="num-cell px-2 py-1.5">{c.render(sumOver(includedCcs))}</td>
               ))}
             </tr>
           </tfoot>
