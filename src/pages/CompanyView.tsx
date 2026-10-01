@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import MonthGrid, { type GridRow } from '../components/MonthGrid'
 import StatusBadge from '../components/StatusBadge'
@@ -12,6 +12,15 @@ import type { Account, Approval, ApprovalStatus, Cycle } from '../lib/types'
 
 type CcValues = Map<number, Map<number, number[]>> // cc -> account -> months
 type Row = Record<string, unknown>
+
+// Business verticals, per the ICS monthly-reporting structure. Cost centres not
+// listed fall into a trailing "Other" group so the grand total always ties.
+const VERTICALS: { label: string; codes: string[] }[] = [
+  { label: 'National', codes: ['CAP', 'CPT', 'DBN', 'ESL', 'GAU', 'MDB', 'VEN'] },
+  { label: 'Industrial', codes: ['KAT', 'RST', 'SEC', 'RCH', 'VER', 'MED'] },
+  { label: 'Data Centres', codes: ['DCS'] },
+  { label: 'Head Office', codes: ['000', 'ZZZ'] },
+]
 
 // PostgREST caps a single response at 1000 rows; page through so company-wide
 // tables (budget_actuals, the statement view) are summed in full.
@@ -157,12 +166,22 @@ export default function CompanyView() {
     const den = g(c.den)
     return fmtPct(den ? g(c.num) / den : 0)
   }
-  const totalCell = (c: Col) => {
-    const sum = (k: string) => includedCcs.reduce((s, cc) => s + (perCcTotals.get(cc.id)?.get(k) ?? 0), 0)
+  // subtotal/total over any list of cost centres (money = Σ, pct = Σnum/Σden)
+  const sumCell = (ccList: typeof includedCcs, c: Col) => {
+    const sum = (k: string) => ccList.reduce((s, cc) => s + (perCcTotals.get(cc.id)?.get(k) ?? 0), 0)
     if ('money' in c) return fmt(sum(c.money))
     const den = sum(c.den)
     return fmtPct(den ? sum(c.num) / den : 0)
   }
+
+  // group the included cost centres into the business verticals
+  const groups = VERTICALS
+    .map((v) => ({ label: v.label, ccs: includedCcs.filter((cc) => v.codes.includes(cc.code)) }))
+    .filter((g) => g.ccs.length)
+  const placed = new Set(groups.flatMap((g) => g.ccs.map((cc) => cc.id)))
+  const other = includedCcs.filter((cc) => !placed.has(cc.id))
+  if (other.length) groups.push({ label: 'Other', ccs: other })
+  const nCols = 2 + columns.length
 
   return (
     <div className="space-y-5">
@@ -192,29 +211,41 @@ export default function CompanyView() {
             </tr>
           </thead>
           <tbody>
-            {includedCcs.map((cc) => {
-              const t = perCcTotals.get(cc.id)
-              return (
-                <tr key={cc.id} className="border-t border-slate-100 hover:bg-sky-50">
-                  <td className="px-2 py-1">
-                    <Link to={`/cc/${cc.code}`} className="font-medium text-sky-700 hover:underline">
-                      {cc.code} — {cc.name}
-                    </Link>
-                  </td>
-                  <td className="px-2 py-1"><StatusBadge status={statusOf(cc.id)} /></td>
+            {groups.map((g) => (
+              <Fragment key={g.label}>
+                <tr className="border-t border-slate-200 bg-sky-100/70 text-sky-900">
+                  <td colSpan={nCols} className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide">{g.label}</td>
+                </tr>
+                {g.ccs.map((cc) => {
+                  const t = perCcTotals.get(cc.id)
+                  return (
+                    <tr key={cc.id} className="border-t border-slate-100 hover:bg-sky-50">
+                      <td className="px-2 py-1 pl-4">
+                        <Link to={`/cc/${cc.code}`} className="font-medium text-sky-700 hover:underline">
+                          {cc.code} — {cc.name}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-1"><StatusBadge status={statusOf(cc.id)} /></td>
+                      {columns.map((c) => (
+                        <td key={c.label} className="num-cell px-2 py-1">{cell(t, c)}</td>
+                      ))}
+                    </tr>
+                  )
+                })}
+                <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
+                  <td colSpan={2} className="px-2 py-1">Total {g.label}</td>
                   {columns.map((c) => (
-                    <td key={c.label} className="num-cell px-2 py-1">{cell(t, c)}</td>
+                    <td key={c.label} className="num-cell px-2 py-1">{sumCell(g.ccs, c)}</td>
                   ))}
                 </tr>
-              )
-            })}
+              </Fragment>
+            ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-300 bg-sky-50 font-semibold text-sky-950">
-              <td className="px-2 py-1.5">Total</td>
-              <td className="px-2 py-1.5" />
+              <td colSpan={2} className="px-2 py-1.5">Total — all cost centres</td>
               {columns.map((c) => (
-                <td key={c.label} className="num-cell px-2 py-1.5">{totalCell(c)}</td>
+                <td key={c.label} className="num-cell px-2 py-1.5">{sumCell(includedCcs, c)}</td>
               ))}
             </tr>
           </tfoot>
