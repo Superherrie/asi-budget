@@ -110,6 +110,9 @@ const validation = []
 
 const sheetNames = wb.SheetNames.filter((n) => !SKIP_SHEETS.has(n))
 const ordered = [PRIMARY_SHEET, ...sheetNames.filter((n) => n !== PRIMARY_SHEET)]
+// only sheets with real month columns are cost centres — skips add-in metadata
+// sheets (e.g. Velixo*) that carry no financial data
+const validSheets = new Set()
 
 for (const sheetName of ordered) {
   const ws = wb.Sheets[sheetName]
@@ -119,6 +122,7 @@ for (const sheetName of ordered) {
     console.warn(`! ${sheetName}: no month date columns found, skipped`)
     continue
   }
+  validSheets.add(sheetName)
   const range = XLSX.utils.decode_range(ws['!ref'])
   let section = null
   let stopped = false
@@ -173,7 +177,7 @@ const accounts = [...accountsByCode.entries()].map(([code, a]) => {
   return { code, name, section: a.section, sort_order: a.sort, input_type: inputTypeFor(code, name) }
 })
 
-const costCentres = sheetNames.map((code) => ({
+const costCentres = [...validSheets].map((code) => ({
   code,
   name: CC_META[code]?.name ?? code,
   type: CC_META[code]?.type ?? 'branch',
