@@ -34,6 +34,7 @@ export default function Layout() {
             <nav className="flex gap-1 overflow-x-auto">
               <NavLink to="/" end className={linkClass}>My Cost Centres</NavLink>
               <NavLink to="/company" className={linkClass}>Company View</NavLink>
+              {profile?.is_admin && <NavLink to="/performance" className={linkClass}>Performance</NavLink>}
               {profile?.is_admin && <NavLink to="/admin" className={linkClass}>Admin</NavLink>}
             </nav>
             <div className="ml-auto flex shrink-0 items-center gap-2 text-sm text-sky-200 sm:gap-3">

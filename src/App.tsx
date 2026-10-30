@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import BudgetEditor from './pages/editor/BudgetEditor'
 import CompanyView from './pages/CompanyView'
+import Performance from './pages/Performance'
 import AdminHome from './pages/admin/AdminHome'
 import ChangePassword from './pages/ChangePassword'
 
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/cc/:code/*" element={<BudgetEditor />} />
             <Route path="/company" element={<CompanyView />} />
+            <Route path="/performance" element={<Performance />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/admin/*" element={<AdminHome />} />
           </Route>
