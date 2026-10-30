@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import SummaryTab from './SummaryTab'
 import StatementTab from './StatementTab'
+import VsBudgetTab from './VsBudgetTab'
 import RevenueTab from './RevenueTab'
 import SalariesTab from './SalariesTab'
 import VehiclesTab from './VehiclesTab'
@@ -111,6 +112,7 @@ export default function BudgetEditor() {
       <nav className="mb-3 flex gap-1 border-b border-slate-200">
         <NavLink to={`/cc/${cc.code}`} end className={tabClass}>Summary</NavLink>
         <NavLink to={`/cc/${cc.code}/statement`} className={tabClass}>Income Statement</NavLink>
+        <NavLink to={`/cc/${cc.code}/vs-budget`} className={tabClass}>vs Budget</NavLink>
         <NavLink to={`/cc/${cc.code}/revenue`} className={tabClass}>Revenue</NavLink>
         <NavLink to={`/cc/${cc.code}/salaries`} className={tabClass}>Salaries &amp; Cell Phones</NavLink>
         <NavLink to={`/cc/${cc.code}/vehicles`} className={tabClass}>Vehicles</NavLink>
@@ -123,6 +125,7 @@ export default function BudgetEditor() {
       <Routes>
         <Route index element={<SummaryTab budget={budget} />} />
         <Route path="statement" element={<StatementTab budget={budget} />} />
+        <Route path="vs-budget" element={<VsBudgetTab budget={budget} />} />
         <Route path="revenue" element={<RevenueTab budget={budget} />} />
         <Route path="salaries" element={<SalariesTab budget={budget} />} />
         <Route path="vehicles" element={<VehiclesTab budget={budget} />} />
